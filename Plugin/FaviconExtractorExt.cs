@@ -87,13 +87,13 @@ namespace FaviconExtractor
             HtmlFaviconDiscoveryResult result;
             try
             {
-                result = await HtmlFaviconDiscoverer.DiscoverAsync(url);
+                result = await FaviconDiscoveryService.DiscoverAsync(url);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(
                     host.MainWindow,
-                    "Level 1 discovery failed: " + ex.Message,
+                    "Favicon discovery failed: " + ex.Message,
                     "FaviconExtractor",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -101,10 +101,19 @@ namespace FaviconExtractor
             }
 
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine("Level 1 (HTML <link>) discovery");
+            sb.AppendLine("Favicon discovery (Level 1 + fallback)");
             sb.AppendLine();
             sb.AppendLine("Input URL: " + url);
             sb.AppendLine("Final page URL: " + result.PageUri);
+            sb.AppendLine("Fallback used: " + (result.UsedFallback ? "yes" : "no"));
+            if (!string.IsNullOrWhiteSpace(result.Level1Error))
+            {
+                sb.AppendLine("Level 1 error: " + result.Level1Error);
+            }
+            if (!string.IsNullOrWhiteSpace(result.DiscoveryNote))
+            {
+                sb.AppendLine("Note: " + result.DiscoveryNote);
+            }
             sb.AppendLine("Candidates found: " + result.Candidates.Count);
             sb.AppendLine();
 
@@ -125,7 +134,7 @@ namespace FaviconExtractor
             }
             else
             {
-                sb.AppendLine("No icon-like <link> elements were found on the page.");
+                sb.AppendLine("No usable icon candidates were found in Level 1 or fallback probes.");
             }
 
             MessageBox.Show(
@@ -147,6 +156,7 @@ namespace FaviconExtractor
                 : candidate.TypeAttribute;
 
             return "score=" + candidate.Score
+                + ", source='" + (string.IsNullOrWhiteSpace(candidate.Source) ? "unknown" : candidate.Source) + "'"
                 + ", rel='" + candidate.RelAttribute + "'"
                 + ", type='" + mimeType + "'"
                 + ", size=" + size

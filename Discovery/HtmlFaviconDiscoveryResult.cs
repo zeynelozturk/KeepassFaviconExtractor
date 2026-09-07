@@ -8,5 +8,8 @@ namespace FaviconExtractor
         public Uri PageUri { get; set; }
         public List<FaviconCandidate> Candidates { get; set; }
         public FaviconCandidate BestCandidate { get; set; }
+        public bool UsedFallback { get; set; }
+        public string Level1Error { get; set; }
+        public string DiscoveryNote { get; set; }
     }
 }

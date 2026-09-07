@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
 
@@ -12,7 +13,7 @@ namespace FaviconExtractor
     {
         private static readonly HttpClient HttpClient = CreateHttpClient();
 
-        public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl)
+        public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl, CancellationToken cancellationToken)
         {
             Uri pageUri;
             if (!Uri.TryCreate(inputUrl, UriKind.Absolute, out pageUri) ||
@@ -21,7 +22,7 @@ namespace FaviconExtractor
                 throw new InvalidOperationException("The entry URL must be an absolute HTTP/HTTPS URL.");
             }
 
-            HttpResponseMessage response = await HttpClient.GetAsync(pageUri).ConfigureAwait(false);
+            HttpResponseMessage response = await HttpClient.GetAsync(pageUri, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             Uri finalPageUri = response.RequestMessage != null && response.RequestMessage.RequestUri != null
@@ -29,6 +30,7 @@ namespace FaviconExtractor
                 : pageUri;
 
             string html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
             var document = new HtmlAgilityPack.HtmlDocument();
             document.LoadHtml(html);
@@ -102,6 +104,7 @@ namespace FaviconExtractor
 
                 yield return new FaviconCandidate
                 {
+                    Source = "html-link",
                     RelAttribute = rel,
                     TypeAttribute = type,
                     SizesAttribute = sizes,

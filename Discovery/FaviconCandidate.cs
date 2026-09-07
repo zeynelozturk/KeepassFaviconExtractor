@@ -5,6 +5,7 @@ namespace FaviconExtractor
 {
     internal sealed class FaviconCandidate
     {
+        public string Source { get; set; }
         public string RelAttribute { get; set; }
         public string TypeAttribute { get; set; }
         public string SizesAttribute { get; set; }

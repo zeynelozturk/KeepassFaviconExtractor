@@ -13,8 +13,7 @@
     <KeePassDir Condition="'$(KeePassDir)' == ''">$(MSBuildProjectDirectory)\.deps\KeePass\2.61</KeePassDir>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
+    <NuGetPackageImportStamp></NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -92,8 +91,10 @@
   <ItemGroup>
     <Compile Include="Configuration\FaviconDiscoveryPreferences.cs" />
     <Compile Include="Discovery\FaviconCandidate.cs" />
+    <Compile Include="Discovery\FaviconDiscoveryService.cs" />
     <Compile Include="Discovery\HtmlFaviconDiscoverer.cs" />
     <Compile Include="Discovery\HtmlFaviconDiscoveryResult.cs" />
+    <Compile Include="Discovery\WellKnownFaviconDiscoverer.cs" />
     <Compile Include="Plugin\FaviconExtractorExt.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Scoring\FaviconScorer.cs" />
