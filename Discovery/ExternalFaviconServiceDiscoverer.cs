@@ -24,7 +24,7 @@ namespace FaviconExtractor
             List<Task<FaviconCandidate>> probes = new List<Task<FaviconCandidate>>();
             foreach (string domain in GetDomainCandidates(siteUri.DnsSafeHost))
             {
-                Uri googleUri = new Uri("https://www.google.com/s2/favicons?domain_url=" + Uri.EscapeDataString("https://" + domain) + "&sz=64");
+                Uri googleUri = new Uri("https://www.google.com/s2/favicons?domain=" + Uri.EscapeDataString(domain) + "&sz=64");
                 probes.Add(ProbeSingleCandidateAsync(googleUri, "external-google-s2", false, cancellationToken));
 
                 Uri faviconImUri = new Uri("https://a.favicon.im/" + Uri.EscapeDataString(domain) + "?larger=true");
@@ -80,6 +80,11 @@ namespace FaviconExtractor
                         return null;
                     }
 
+                    if (IsUnsupportedContentType(type))
+                    {
+                        return null;
+                    }
+
                     Size? size = null;
                     string rel = treatAsLogo ? "logo" : "icon";
                     int score = FaviconScorer.Score("icon", type, size);
@@ -95,7 +100,7 @@ namespace FaviconExtractor
                         RelAttribute = rel,
                         TypeAttribute = type,
                         SizesAttribute = string.Empty,
-                        IconUri = finalUri,
+                        IconUri = GetCandidateIconUri(requestUri, finalUri, source),
                         BestSize = size,
                         Score = score
                     };
@@ -159,6 +164,26 @@ namespace FaviconExtractor
                 || absolute.EndsWith(".gif")
                 || absolute.Contains("/s2/favicons")
                 || absolute.Contains("favicon.im");
+        }
+
+        private static Uri GetCandidateIconUri(Uri requestUri, Uri finalUri, string source)
+        {
+            if (string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase))
+            {
+                return requestUri;
+            }
+
+            return finalUri;
+        }
+
+        private static bool IsUnsupportedContentType(string type)
+        {
+            if (string.IsNullOrWhiteSpace(type))
+            {
+                return false;
+            }
+
+            return type.IndexOf("image/avif", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public static async Task<FaviconCandidate> DiscoverLogoAsync(Uri siteUri, CancellationToken cancellationToken)

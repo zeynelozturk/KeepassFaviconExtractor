@@ -176,6 +176,12 @@ namespace FaviconExtractor
                     continue;
                 }
 
+                if (IsUnsupportedForAssignment(candidate))
+                {
+                    sb.AppendLine("Candidate #" + (i + 1) + " skipped: unsupported image format for .NET Framework decoder.");
+                    continue;
+                }
+
                 try
                 {
                     byte[] sourceBytes = await FaviconImageDownloader
@@ -273,6 +279,23 @@ namespace FaviconExtractor
             {
                 host.MainWindow.RefreshEntriesList();
             }
+        }
+
+        private static bool IsUnsupportedForAssignment(FaviconCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return true;
+            }
+
+            string type = candidate.TypeAttribute;
+            if (!string.IsNullOrWhiteSpace(type) && type.IndexOf("image/avif", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            string url = candidate.IconUri != null ? candidate.IconUri.AbsoluteUri : string.Empty;
+            return !string.IsNullOrWhiteSpace(url) && url.EndsWith(".avif", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string FormatCandidate(FaviconCandidate candidate)
