@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(PackagePluginOnBuild)' == ''">
+	<PackagePluginOnBuild>true</PackagePluginOnBuild>
+  </PropertyGroup>
+</Project>

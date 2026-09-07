@@ -55,3 +55,42 @@ This creates:
 
 To test it, copy the `.plgx` file into your KeePass `Plugins` directory and
 restart KeePass.
+
+## Build both DLL + PLGX release artifacts
+
+Create both distribution formats in one command:
+
+```powershell
+.\scripts\build-release.ps1
+```
+
+Outputs:
+
+- `dist\dll\KeePassFaviconExtractor\` (plugin DLL + dependency DLLs/PDB)
+- `dist\plgx\KeePassFaviconExtractor.plgx`
+- `dist\zip\KeePassFaviconExtractor-Release-dll.zip`
+- `dist\zip\KeePassFaviconExtractor-plgx.zip`
+- `dist\zip\KeePassFaviconExtractor-Release-hybrid.zip` (contains both DLL and PLGX packages)
+
+If your runtime KeePass is elsewhere:
+
+```powershell
+.\scripts\build-release.ps1 -KeePassExePath "C:\Path\To\KeePass\KeePass.exe"
+```
+
+## Automatic packaging on Release build
+
+Release builds package automatically by default (including Visual Studio UI
+Release builds). The default is set in `Directory.Build.props`.
+
+You can still control it explicitly from the command line:
+
+```powershell
+msbuild .\KeepassFaviconExtractor.csproj /p:Configuration=Release /p:PackagePluginOnBuild=true
+```
+
+Disable packaging for a specific Release build when needed:
+
+```powershell
+msbuild .\KeepassFaviconExtractor.csproj /p:Configuration=Release /p:PackagePluginOnBuild=false
+```

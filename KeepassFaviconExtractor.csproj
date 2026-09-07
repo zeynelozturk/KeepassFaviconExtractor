@@ -93,9 +93,11 @@
   <ItemGroup>
     <None Include="AGENTS.md" />
     <None Include="app.config" />
+    <None Include="Directory.Build.targets" />
     <None Include="packages.config" />
     <None Include="plgx\KeePassFaviconExtractor.csproj" />
     <None Include="scripts\build-plgx.ps1" />
+    <None Include="scripts\build-release.ps1" />
   </ItemGroup>
   <Target Name="ValidateKeePassReference" BeforeTargets="ResolveAssemblyReferences">
     <Error Condition="!Exists('$(KeePassDir)\KeePass.exe')" Text="KeePass.exe was not found at '$(KeePassDir)\KeePass.exe'. Run scripts\bootstrap-keepass.ps1 or set the KeePassDir MSBuild property to your KeePass 2.61 directory." />

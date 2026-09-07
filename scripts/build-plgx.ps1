@@ -1,12 +1,25 @@
 [CmdletBinding()]
 param(
-	[string]$OutputPath = (Join-Path $PSScriptRoot '..\dist\KeePassFaviconExtractor.plgx'),
-	[string]$KeePassExePath = (Join-Path $PSScriptRoot '..\.deps\KeePass\2.61\KeePass.exe')
+	[string]$OutputPath,
+	[string]$KeePassExePath
 )
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$scriptRoot = $PSScriptRoot
+if ([string]::IsNullOrEmpty($scriptRoot)) {
+	$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+
+if ([string]::IsNullOrEmpty($OutputPath)) {
+	$OutputPath = Join-Path $scriptRoot '..\dist\KeePassFaviconExtractor.plgx'
+}
+
+if ([string]::IsNullOrEmpty($KeePassExePath)) {
+	$KeePassExePath = Join-Path $scriptRoot '..\.deps\KeePass\2.61\KeePass.exe'
+}
+
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..'))
 $outputFile = [IO.Path]::GetFullPath($OutputPath)
 $outputDir = Split-Path $outputFile -Parent
 $keepassExe = [IO.Path]::GetFullPath($KeePassExePath)
