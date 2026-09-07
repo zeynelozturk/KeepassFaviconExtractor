@@ -4,11 +4,11 @@
 		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor.Tests' and Exists('$(TargetPath)') and ( '$(RunOnBuild)' == 'true' or ( '$(RunOnBuild)' == '' and '$(Configuration)' == 'Release' ) )">
 	<Message Importance="high" Text="RunOnBuild is enabled. Running tests for $(MSBuildProjectName)..." />
 	<Exec Condition="Exists('$(DevEnvDir)CommonExtensions\Microsoft\TestWindow\vstest.console.exe')"
-		  Command="&quot;$(DevEnvDir)CommonExtensions\Microsoft\TestWindow\vstest.console.exe&quot; &quot;$(TargetPath)&quot; /logger:trx /TestAdapterPath:&quot;$(MSTestAdapterPath)&quot;"
+		  Command="&quot;$(DevEnvDir)CommonExtensions\Microsoft\TestWindow\vstest.console.exe&quot; &quot;$(TargetPath)&quot; /logger:trx /TestAdapterPath:&quot;$(FaviconExtractorMSTestAdapterPath)&quot;"
 		  StandardOutputImportance="high"
 		  StandardErrorImportance="high" />
 	<Exec Condition="!Exists('$(DevEnvDir)CommonExtensions\Microsoft\TestWindow\vstest.console.exe')"
-		  Command="vstest.console.exe &quot;$(TargetPath)&quot; /logger:trx /TestAdapterPath:&quot;$(MSTestAdapterPath)&quot;"
+		  Command="vstest.console.exe &quot;$(TargetPath)&quot; /logger:trx /TestAdapterPath:&quot;$(FaviconExtractorMSTestAdapterPath)&quot;"
 		  StandardOutputImportance="high"
 		  StandardErrorImportance="high" />
 	<Message Importance="high" Text="RunOnBuild tests passed for $(MSBuildProjectName)." />
@@ -19,7 +19,7 @@
 		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor.Tests'">
 	<Message Importance="high" Text="RunOnBuild=$(RunOnBuild); Configuration=$(Configuration); Project=$(MSBuildProjectName)" />
 	<Message Importance="high" Text="DevEnvDir=$(DevEnvDir)" />
-	<Message Importance="high" Text="MSTestAdapterPath=$(MSTestAdapterPath)" />
+	<Message Importance="high" Text="FaviconExtractorMSTestAdapterPath=$(FaviconExtractorMSTestAdapterPath)" />
 	<Message Importance="high" Condition="'$(RunOnBuild)' == 'true' or ( '$(RunOnBuild)' == '' and '$(Configuration)' == 'Release' )" Text="RunOnBuild=true for $(MSBuildProjectName)." />
 	<Message Importance="high" Condition="'$(RunOnBuild)' != 'true' and ( '$(RunOnBuild)' != '' or '$(Configuration)' != 'Release' )" Text="RunOnBuild is disabled for $(MSBuildProjectName)." />
   </Target>

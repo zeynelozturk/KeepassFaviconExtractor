@@ -174,7 +174,7 @@ namespace FaviconExtractor
                     selectedEntry,
                     normalizedPng);
 
-                host.MainWindow.RefreshEntriesList();
+                RefreshEntryListIcons(selectedEntry);
 
                 sb.AppendLine("Assigned custom icon to entry.");
                 sb.AppendLine("Assigned icon UUID: " + assignedUuid);
@@ -192,6 +192,37 @@ namespace FaviconExtractor
                     "FaviconExtractor",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
+            }
+        }
+
+        private void RefreshEntryListIcons(PwEntry selectedEntry)
+        {
+            if (host == null || host.MainWindow == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var mainWindow = host.MainWindow;
+                var activeDocument = mainWindow.DocumentManager != null ? mainWindow.DocumentManager.ActiveDocument : null;
+                PwGroup selectedGroup = mainWindow.GetSelectedGroup();
+                PwGroup entrySourceGroup = selectedEntry != null ? selectedEntry.ParentGroup : null;
+                if (entrySourceGroup == null)
+                {
+                    entrySourceGroup = selectedGroup;
+                }
+
+                if (activeDocument != null)
+                {
+                    mainWindow.UpdateUI(false, activeDocument, false, selectedGroup, true, entrySourceGroup, false);
+                }
+
+                mainWindow.RefreshEntriesList();
+            }
+            catch
+            {
+                host.MainWindow.RefreshEntriesList();
             }
         }
 

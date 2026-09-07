@@ -1,7 +1,7 @@
 <Project>
 	<PropertyGroup>
-	<MSTestAdapterVersion Condition="'$(MSTestAdapterVersion)' == ''">2.2.10</MSTestAdapterVersion>
-	<MSTestAdapterPath Condition="'$(MSTestAdapterPath)' == ''">$(MSBuildThisFileDirectory)packages\MSTest.TestAdapter.$(MSTestAdapterVersion)\build\_common</MSTestAdapterPath>
+	<FaviconExtractorMSTestAdapterVersion Condition="'$(FaviconExtractorMSTestAdapterVersion)' == ''">2.2.10</FaviconExtractorMSTestAdapterVersion>
+	<FaviconExtractorMSTestAdapterPath Condition="'$(FaviconExtractorMSTestAdapterPath)' == ''">$(MSBuildThisFileDirectory)packages\MSTest.TestAdapter.$(FaviconExtractorMSTestAdapterVersion)\build\_common</FaviconExtractorMSTestAdapterPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(PackagePluginOnBuild)' == ''">

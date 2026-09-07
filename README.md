@@ -119,8 +119,9 @@ You can still override it explicitly with `/p:RunOnBuild=true|false`.
 MSTest adapter resolution for build-time execution is centralized in
 `Directory.Build.props`:
 
-- `MSTestAdapterVersion` (currently `2.2.10`)
-- `MSTestAdapterPath`
+- `FaviconExtractorMSTestAdapterVersion` (currently `2.2.10`)
+- `FaviconExtractorMSTestAdapterPath`
 
-When upgrading MSTest adapter, update only `MSTestAdapterVersion` (or override
-`MSTestAdapterPath` directly).
+When upgrading MSTest adapter, update only
+`FaviconExtractorMSTestAdapterVersion` (or override
+`FaviconExtractorMSTestAdapterPath` directly).
