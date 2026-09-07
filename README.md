@@ -13,3 +13,23 @@ The plugin may not compile or function correctly yet. APIs and
 implementation details may change substantially.
 
 Do not use this version with important KeePass databases.
+
+## Development setup
+
+The project targets .NET Framework 4.8 and builds against the official
+KeePass 2.61 portable distribution. Download the required development files
+into the ignored `.deps` directory before opening or building the project:
+
+```powershell
+.\scripts\bootstrap-keepass.ps1
+```
+
+The script downloads the archive from SourceForge, verifies its pinned SHA-256
+checksum, and extracts it to `.deps\KeePass\2.61`. It is safe to run repeatedly;
+use `-Force` to replace an existing installation.
+
+To build against an existing KeePass 2.61 installation instead, override the
+MSBuild property:
+
+```powershell
+msbuild .\KeepassFaviconExtractor.csproj /p:KeePassDir="C:\Path\To\KeePass"
