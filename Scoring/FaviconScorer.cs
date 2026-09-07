@@ -19,6 +19,16 @@ namespace FaviconExtractor
             return score - FaviconDiscoveryPreferences.FallbackScorePenalty;
         }
 
+        public static int ApplyExternalServicePenalty(int score)
+        {
+            return score - FaviconDiscoveryPreferences.ExternalServiceScorePenalty;
+        }
+
+        public static int ApplyLogoPenalty(int score)
+        {
+            return score - FaviconDiscoveryPreferences.LogoScorePenalty;
+        }
+
         private static int ScoreRel(string rel)
         {
             if (string.IsNullOrWhiteSpace(rel))

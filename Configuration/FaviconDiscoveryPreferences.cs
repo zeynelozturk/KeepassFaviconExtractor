@@ -13,6 +13,8 @@ namespace FaviconExtractor
         public const int MaxFallbackRequestsPerLookup = 6;
         public const int MaxFallbackRequestsWhenBlocked = 3;
         public const int FallbackScorePenalty = 150;
+        public const int ExternalServiceScorePenalty = 190;
+        public const int LogoScorePenalty = 120;
 
         public static readonly IReadOnlyList<string> WellKnownFaviconPaths = new[]
         {

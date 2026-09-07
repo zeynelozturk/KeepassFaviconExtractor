@@ -53,6 +53,39 @@ namespace FaviconExtractor
                     }
                 }
 
+                if (mergedCandidates.Count == 0 && !timedOut)
+                {
+                    try
+                    {
+                        List<FaviconCandidate> externalCandidates = await ExternalFaviconServiceDiscoverer
+                            .DiscoverAsync(pageUri, cts.Token)
+                            .ConfigureAwait(false);
+                        mergedCandidates.AddRange(externalCandidates);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        timedOut = true;
+                    }
+                }
+
+                if (mergedCandidates.Count == 0 && !timedOut)
+                {
+                    try
+                    {
+                        FaviconCandidate logoCandidate = await ExternalLogoDiscoverer
+                            .DiscoverAsync(pageUri, cts.Token)
+                            .ConfigureAwait(false);
+                        if (logoCandidate != null)
+                        {
+                            mergedCandidates.Add(logoCandidate);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        timedOut = true;
+                    }
+                }
+
                 bool needsFallback = mergedCandidates.Count == 0;
                 if (needsFallback && !timedOut)
                 {
@@ -91,6 +124,10 @@ namespace FaviconExtractor
                 else if (LooksLikeBlockedResponse(level1Error))
                 {
                     discoveryNote = "Level 1 appears blocked (401/403/429); fallback probes were limited.";
+                }
+                else if (mergedCandidates.Count == 0)
+                {
+                    discoveryNote = "No candidates from Level 1, well-known probes, external favicon services, or logo fallback.";
                 }
 
                 return new HtmlFaviconDiscoveryResult

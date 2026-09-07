@@ -90,6 +90,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Configuration\FaviconDiscoveryPreferences.cs" />
+    <Compile Include="Discovery\ExternalFaviconServiceDiscoverer.cs" />
+    <Compile Include="Discovery\ExternalLogoDiscoverer.cs" />
     <Compile Include="Discovery\FaviconCandidate.cs" />
     <Compile Include="Discovery\FaviconDiscoveryService.cs" />
     <Compile Include="Discovery\HtmlFaviconDiscoverer.cs" />
