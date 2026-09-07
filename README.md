@@ -51,7 +51,7 @@ If your runtime KeePass is elsewhere:
 
 This creates:
 
-`dist\KeePassFaviconExtractor.plgx`
+`dist\FaviconExtractor.plgx`
 
 To test it, copy the `.plgx` file into your KeePass `Plugins` directory and
 restart KeePass.
@@ -66,11 +66,11 @@ Create both distribution formats in one command:
 
 Outputs:
 
-- `dist\dll\KeePassFaviconExtractor\` (plugin DLL + dependency DLLs/PDB)
-- `dist\plgx\KeePassFaviconExtractor.plgx`
-- `dist\zip\KeePassFaviconExtractor-Release-dll.zip`
-- `dist\zip\KeePassFaviconExtractor-plgx.zip`
-- `dist\zip\KeePassFaviconExtractor-Release-hybrid.zip` (contains both DLL and PLGX packages)
+- `dist\dll\FaviconExtractor\` (plugin DLL + dependency DLLs/PDB)
+- `dist\plgx\FaviconExtractor.plgx`
+- `dist\zip\FaviconExtractor-Release-dll.zip`
+- `dist\zip\FaviconExtractor-plgx.zip`
+- `dist\zip\FaviconExtractor-Release-hybrid.zip` (contains both DLL and PLGX packages)
 
 If your runtime KeePass is elsewhere:
 

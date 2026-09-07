@@ -7,14 +7,13 @@
     <ProjectGuid>{3117A0A6-6D2A-4831-86EA-0F0092DEA706}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>KeePassFaviconExtractor</RootNamespace>
-    <AssemblyName>KeePassFaviconExtractor</AssemblyName>
+    <RootNamespace>FaviconExtractor</RootNamespace>
+    <AssemblyName>FaviconExtractor</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <KeePassDir Condition="'$(KeePassDir)' == ''">$(MSBuildProjectDirectory)\.deps\KeePass\2.61</KeePassDir>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
+    <NuGetPackageImportStamp></NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -95,7 +94,7 @@
     <None Include="app.config" />
     <None Include="Directory.Build.targets" />
     <None Include="packages.config" />
-    <None Include="plgx\KeePassFaviconExtractor.csproj" />
+    <None Include="plgx\FaviconExtractor.csproj" />
     <None Include="scripts\build-plgx.ps1" />
     <None Include="scripts\build-release.ps1" />
   </ItemGroup>

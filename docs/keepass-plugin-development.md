@@ -1,6 +1,6 @@
 # KeePass 2.x Plugin Development Reference
 
-This document summarizes the relevant KeePass 2.x plugin-development requirements for KeePassFaviconExtractor.
+This document summarizes the relevant KeePass 2.x plugin-development requirements for FaviconExtractor.
 
 ## Authoritative source
 
@@ -45,15 +45,15 @@ The main plugin class follows a naming convention.
 
 If the DLL is:
 
-`KeePassFaviconExtractor.dll`
+`FaviconExtractor.dll`
 
 the namespace should be:
 
-`KeePassFaviconExtractor`
+`FaviconExtractor`
 
 and the main plugin class should be:
 
-`KeePassFaviconExtractorExt`
+`FaviconExtractorExt`
 
 The class derives from `Plugin`.
 
@@ -62,9 +62,9 @@ Example structure:
 ```csharp
 using KeePass.Plugins;
 
-namespace KeePassFaviconExtractor
+namespace FaviconExtractor
 {
-    public sealed class KeePassFaviconExtractorExt : Plugin
+    public sealed class FaviconExtractorExt : Plugin
     {
         private IPluginHost m_host;
 
@@ -108,7 +108,7 @@ KeePass calls it shortly before unloading the plugin.
 
 Release resources here rather than relying on a destructor/finalizer.
 
-For KeePassFaviconExtractor this is particularly relevant for:
+For FaviconExtractor this is particularly relevant for:
 
 - background operations
 - HTTP resources
@@ -131,7 +131,7 @@ Do not cache the returned menu item.
 
 KeePass owns the returned menu item and may request it multiple times or place it in multiple locations.
 
-For KeePassFaviconExtractor, menu functionality can later be used for commands such as:
+For FaviconExtractor, menu functionality can later be used for commands such as:
 
 - Fetch favicon
 - Refresh favicon
@@ -165,7 +165,7 @@ If `KeePass` is part of the plugin name, it should be directly attached to anoth
 
 Valid:
 
-`KeePassFaviconExtractor`
+`FaviconExtractor`
 
 Avoid:
 
@@ -173,14 +173,14 @@ Avoid:
 
 For this project the intended name is:
 
-`KeePassFaviconExtractor`
+`FaviconExtractor`
 
 Therefore:
 
 ```text
-DLL:       KeePassFaviconExtractor.dll
-Namespace: KeePassFaviconExtractor
-Class:     KeePassFaviconExtractorExt
+DLL:       FaviconExtractor.dll
+Namespace: FaviconExtractor
+Class:     FaviconExtractorExt
 ```
 
 ## DLL and PLGX
@@ -203,7 +203,7 @@ DLL advantages include:
 
 PLGX advantages include better compatibility with custom KeePass builds because KeePass can adjust its own reference before compiling the plugin.
 
-For the initial development of KeePassFaviconExtractor, use a normal DLL project.
+For the initial development of FaviconExtractor, use a normal DLL project.
 
 PLGX packaging can be considered later.
 
@@ -252,7 +252,7 @@ Start with the smallest valid KeePass plugin:
 
 1. Create the .NET Framework class library.
 2. Reference the official KeePass 2.61 `KeePass.exe`.
-3. Create `KeePassFaviconExtractorExt`.
+3. Create `FaviconExtractorExt`.
 4. Implement `Initialize`.
 5. Implement `Terminate`.
 6. Set the required assembly metadata.

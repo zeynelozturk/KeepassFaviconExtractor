@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("KeePassFaviconExtractor")]
+[assembly: AssemblyTitle("FaviconExtractor")]
 [assembly: AssemblyDescription("Finds and assigns website favicons to KeePass entries.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]

@@ -43,7 +43,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..'))
 $projectFile = [IO.Path]::GetFullPath($ProjectPath)
 $outputBase = [IO.Path]::GetFullPath($OutputRoot)
 $buildOutput = Join-Path $repoRoot ("bin\$Configuration")
-$dllOutDir = Join-Path $outputBase 'dll\KeePassFaviconExtractor'
+$dllOutDir = Join-Path $outputBase 'dll\FaviconExtractor'
 $plgxOutDir = Join-Path $outputBase 'plgx'
 $zipOutDir = Join-Path $outputBase 'zip'
 
@@ -84,21 +84,21 @@ foreach ($file in $runtimeFiles) {
 	Copy-Item $file.FullName (Join-Path $dllOutDir $file.Name)
 }
 
-$plgxPath = Join-Path $plgxOutDir 'KeePassFaviconExtractor.plgx'
+$plgxPath = Join-Path $plgxOutDir 'FaviconExtractor.plgx'
 & (Join-Path $scriptRoot 'build-plgx.ps1') -OutputPath $plgxPath -KeePassExePath $KeePassExePath
 if (-not (Test-Path $plgxPath)) {
 	throw 'PLGX packaging failed.'
 }
 
-$dllZip = Join-Path $zipOutDir "KeePassFaviconExtractor-$Configuration-dll.zip"
-$plgxZip = Join-Path $zipOutDir 'KeePassFaviconExtractor-plgx.zip'
-$hybridZip = Join-Path $zipOutDir "KeePassFaviconExtractor-$Configuration-hybrid.zip"
+$dllZip = Join-Path $zipOutDir "FaviconExtractor-$Configuration-dll.zip"
+$plgxZip = Join-Path $zipOutDir 'FaviconExtractor-plgx.zip'
+$hybridZip = Join-Path $zipOutDir "FaviconExtractor-$Configuration-hybrid.zip"
 
 $hybridStage = Join-Path $outputBase '_hybrid-stage'
 New-Item -ItemType Directory -Path (Join-Path $hybridStage 'dll') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hybridStage 'plgx') -Force | Out-Null
 Copy-Item (Join-Path $dllOutDir '*') (Join-Path $hybridStage 'dll') -Recurse -Force
-Copy-Item $plgxPath (Join-Path $hybridStage 'plgx\KeePassFaviconExtractor.plgx') -Force
+Copy-Item $plgxPath (Join-Path $hybridStage 'plgx\FaviconExtractor.plgx') -Force
 
 Compress-Archive -Path (Join-Path $dllOutDir '*') -DestinationPath $dllZip -Force
 Compress-Archive -Path $plgxPath -DestinationPath $plgxZip -Force

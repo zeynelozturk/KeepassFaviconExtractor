@@ -12,7 +12,7 @@ if ([string]::IsNullOrEmpty($scriptRoot)) {
 }
 
 if ([string]::IsNullOrEmpty($OutputPath)) {
-	$OutputPath = Join-Path $scriptRoot '..\dist\KeePassFaviconExtractor.plgx'
+	$OutputPath = Join-Path $scriptRoot '..\dist\FaviconExtractor.plgx'
 }
 
 if ([string]::IsNullOrEmpty($KeePassExePath)) {
@@ -27,7 +27,7 @@ $keepassExe = [IO.Path]::GetFullPath($KeePassExePath)
 $sourceFiles = @(
 	(Join-Path $repoRoot 'KeePassFaviconExtractorExt.cs'),
 	(Join-Path $repoRoot 'Properties\AssemblyInfo.cs'),
-	(Join-Path $repoRoot 'plgx\KeePassFaviconExtractor.csproj')
+	(Join-Path $repoRoot 'plgx\FaviconExtractor.csproj')
 )
 
 foreach ($file in $sourceFiles) {
@@ -40,8 +40,8 @@ if (-not (Test-Path $keepassExe)) {
 	throw "KeePass.exe was not found at '$keepassExe'. Run scripts\\bootstrap-keepass.ps1 or pass -KeePassExePath."
 }
 
-$stageRoot = Join-Path ([IO.Path]::GetTempPath()) ("KeePassFaviconExtractor-plgx-" + [Guid]::NewGuid().ToString('N'))
-$stageProjectDir = Join-Path $stageRoot 'KeePassFaviconExtractor'
+$stageRoot = Join-Path ([IO.Path]::GetTempPath()) ("FaviconExtractor-plgx-" + [Guid]::NewGuid().ToString('N'))
+$stageProjectDir = Join-Path $stageRoot 'FaviconExtractor'
 $stagePackagePath = "$stageProjectDir.plgx"
 
 try {
@@ -50,7 +50,7 @@ try {
 
 	Copy-Item (Join-Path $repoRoot 'KeePassFaviconExtractorExt.cs') (Join-Path $stageProjectDir 'KeePassFaviconExtractorExt.cs')
 	Copy-Item (Join-Path $repoRoot 'Properties\AssemblyInfo.cs') (Join-Path $stageProjectDir 'Properties\AssemblyInfo.cs')
-	Copy-Item (Join-Path $repoRoot 'plgx\KeePassFaviconExtractor.csproj') (Join-Path $stageProjectDir 'KeePassFaviconExtractor.csproj')
+	Copy-Item (Join-Path $repoRoot 'plgx\FaviconExtractor.csproj') (Join-Path $stageProjectDir 'FaviconExtractor.csproj')
 
 	$keepassAssembly = [Reflection.Assembly]::LoadFrom($keepassExe)
 	$plgxType = $keepassAssembly.GetType('KeePass.Plugins.PlgxPlugin', $true)

@@ -2,9 +2,9 @@ using System;
 using System.Windows.Forms;
 using KeePass.Plugins;
 
-namespace KeePassFaviconExtractor
+namespace FaviconExtractor
 {
-    public class KeePassFaviconExtractorExt : Plugin
+    public sealed class FaviconExtractorExt : Plugin
     {
         private IPluginHost host;
 
@@ -49,17 +49,10 @@ namespace KeePassFaviconExtractor
         private static void OnMenuItemClick(object sender, EventArgs e)
         {
             MessageBox.Show(
-                "KeePassFaviconExtractor loaded successfully. Favicon fetching will be added next.",
-                "KeePassFaviconExtractor",
+                "FaviconExtractor loaded successfully. Favicon fetching will be added next.",
+                "FaviconExtractor",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
     }
-
-namespace KeepassFaviconExtractor
-{
-    public sealed class KeepassFaviconExtractorExt : KeePassFaviconExtractor.KeePassFaviconExtractorExt
-    {
-    }
-}
 }
