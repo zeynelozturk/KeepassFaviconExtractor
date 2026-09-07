@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -13,7 +13,8 @@
     <KeePassDir Condition="'$(KeePassDir)' == ''">$(MSBuildProjectDirectory)\.deps\KeePass\2.61</KeePassDir>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
-    <NuGetPackageImportStamp></NuGetPackageImportStamp>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -33,6 +34,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="HtmlAgilityPack, Version=1.13.0.0, Culture=neutral, PublicKeyToken=bd319b19eaf3b43a, processorArchitecture=MSIL">
+      <HintPath>packages\HtmlAgilityPack.1.13.0\lib\Net45\HtmlAgilityPack.dll</HintPath>
+    </Reference>
     <Reference Include="KeePass">
       <HintPath>$(KeePassDir)\KeePass.exe</HintPath>
       <Private>False</Private>
@@ -86,8 +90,13 @@
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="FaviconExtractorExt.cs" />
+    <Compile Include="Configuration\FaviconDiscoveryPreferences.cs" />
+    <Compile Include="Discovery\FaviconCandidate.cs" />
+    <Compile Include="Discovery\HtmlFaviconDiscoverer.cs" />
+    <Compile Include="Discovery\HtmlFaviconDiscoveryResult.cs" />
+    <Compile Include="Plugin\FaviconExtractorExt.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Scoring\FaviconScorer.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="AGENTS.md" />
@@ -95,6 +104,7 @@
     <None Include="Directory.Build.targets" />
     <None Include="packages.config" />
     <None Include="plgx\FaviconExtractor.csproj" />
+    <None Include="scripts\bootstrap-keepass.ps1" />
     <None Include="scripts\build-plgx.ps1" />
     <None Include="scripts\build-release.ps1" />
   </ItemGroup>
