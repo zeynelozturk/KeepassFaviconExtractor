@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 using KeePass.Plugins;
 using KeePassLib;
@@ -122,6 +123,8 @@ namespace FaviconExtractor
                 sb.AppendLine("Best candidate (preferred sizes: 64 > 32 > 16):");
                 sb.AppendLine(FormatCandidate(result.BestCandidate));
                 sb.AppendLine();
+
+                await TryAssignBestCandidateToEntryAsync(selectedEntry, result.BestCandidate, sb);
             }
 
             if (result.Candidates.Count > 0)
@@ -143,6 +146,53 @@ namespace FaviconExtractor
                 "FaviconExtractor",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+
+        private async System.Threading.Tasks.Task TryAssignBestCandidateToEntryAsync(PwEntry selectedEntry, FaviconCandidate bestCandidate, StringBuilder sb)
+        {
+            PwDatabase database = host.Database;
+            if (database == null || !database.IsOpen)
+            {
+                sb.AppendLine("Assignment skipped: no open KeePass database.");
+                sb.AppendLine();
+                return;
+            }
+
+            try
+            {
+                byte[] sourceBytes = await FaviconImageDownloader
+                    .DownloadAsync(bestCandidate.IconUri, CancellationToken.None)
+                    .ConfigureAwait(true);
+
+                byte[] normalizedPng = IconNormalizer.NormalizeToPng(
+                    sourceBytes,
+                    bestCandidate.TypeAttribute,
+                    bestCandidate.IconUri.AbsoluteUri);
+
+                PwUuid assignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(
+                    database,
+                    selectedEntry,
+                    normalizedPng);
+
+                host.MainWindow.RefreshEntriesList();
+
+                sb.AppendLine("Assigned custom icon to entry.");
+                sb.AppendLine("Assigned icon UUID: " + assignedUuid);
+                sb.AppendLine("Normalized PNG size: " + normalizedPng.Length + " bytes");
+                sb.AppendLine();
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("Assignment failed: " + ex.Message);
+                sb.AppendLine();
+
+                MessageBox.Show(
+                    host.MainWindow,
+                    "Icon assignment failed: " + ex.Message,
+                    "FaviconExtractor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
         }
 
         private static string FormatCandidate(FaviconCandidate candidate)

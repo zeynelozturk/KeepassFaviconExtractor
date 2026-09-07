@@ -9,12 +9,16 @@ namespace FaviconExtractor
         public static readonly TimeSpan TotalDiscoveryTimeout = TimeSpan.FromSeconds(12);
         public static readonly TimeSpan HtmlRequestTimeout = TimeSpan.FromSeconds(4);
         public static readonly TimeSpan FallbackProbeTimeout = TimeSpan.FromSeconds(2);
+        public static readonly TimeSpan IconDownloadTimeout = TimeSpan.FromSeconds(8);
         public const int MaxAutomaticRedirects = 6;
         public const int MaxFallbackRequestsPerLookup = 6;
         public const int MaxFallbackRequestsWhenBlocked = 3;
+        public const int MaxIconDownloadBytes = 1024 * 1024;
         public const int FallbackScorePenalty = 150;
         public const int ExternalServiceScorePenalty = 190;
         public const int LogoScorePenalty = 120;
+        public const int NormalizedIconSize = 64;
+        public const bool UpscaleSmallImagesDuringNormalization = false;
 
         public static readonly IReadOnlyList<string> WellKnownFaviconPaths = new[]
         {

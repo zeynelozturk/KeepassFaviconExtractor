@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="KeepassFaviconExtractor.csproj" Id="3117a0a6-6d2a-4831-86ea-0f0092dea706" />
+  <Project Path="KeepassFaviconExtractor.Tests\KeepassFaviconExtractor.Tests.csproj" Id="5e710c30-08d0-4d8a-b91f-4dd771567a7a" />
 </Solution>
