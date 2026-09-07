@@ -68,7 +68,7 @@ namespace FaviconExtractor
                     }
                 }
 
-                if (mergedCandidates.Count == 0 && !timedOut)
+                if (ShouldTryLogoFallback(mergedCandidates) && !timedOut)
                 {
                     try
                     {
@@ -145,6 +145,28 @@ namespace FaviconExtractor
         private static bool LooksLikeBlockedResponse(string level1Error)
         {
             return !string.IsNullOrWhiteSpace(level1Error) && BlockedStatusCodePattern.IsMatch(level1Error);
+        }
+
+        private static bool ShouldTryLogoFallback(List<FaviconCandidate> candidates)
+        {
+            if (candidates == null || candidates.Count == 0)
+            {
+                return true;
+            }
+
+            foreach (FaviconCandidate candidate in candidates)
+            {
+                if (candidate != null && candidate.BestSize.HasValue)
+                {
+                    int maxSide = Math.Max(candidate.BestSize.Value.Width, candidate.BestSize.Value.Height);
+                    if (maxSide >= 32)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
     }
 }

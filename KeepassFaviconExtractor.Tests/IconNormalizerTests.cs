@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Text;
 using KeePassLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -130,6 +131,24 @@ namespace FaviconExtractor
             Assert.AreEqual(1, database.CustomIcons.Count);
             Assert.IsTrue(entry1.CustomIconUuid.Equals(first));
             Assert.IsTrue(entry2.CustomIconUuid.Equals(second));
+        }
+
+        [TestMethod]
+        public void GetDomainCandidates_WithSubdomain_IncludesParentDomain()
+        {
+            var candidates = ExternalFaviconServiceDiscoverer.GetDomainCandidates("fr.7digital.com").ToArray();
+
+            CollectionAssert.AreEqual(
+                new[] { "fr.7digital.com", "7digital.com" },
+                candidates);
+        }
+
+        [TestMethod]
+        public void GetDomainCandidates_WithoutSubdomain_ReturnsHostOnly()
+        {
+            var candidates = ExternalFaviconServiceDiscoverer.GetDomainCandidates("example.com").ToArray();
+
+            CollectionAssert.AreEqual(new[] { "example.com" }, candidates);
         }
     }
 }
