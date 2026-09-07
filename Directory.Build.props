@@ -1,4 +1,9 @@
 <Project>
+	<PropertyGroup>
+	<MSTestAdapterVersion Condition="'$(MSTestAdapterVersion)' == ''">2.2.10</MSTestAdapterVersion>
+	<MSTestAdapterPath Condition="'$(MSTestAdapterPath)' == ''">$(MSBuildThisFileDirectory)packages\MSTest.TestAdapter.$(MSTestAdapterVersion)\build\_common</MSTestAdapterPath>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(PackagePluginOnBuild)' == ''">
 	<PackagePluginOnBuild>true</PackagePluginOnBuild>
   </PropertyGroup>

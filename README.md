@@ -94,3 +94,33 @@ Disable packaging for a specific Release build when needed:
 ```powershell
 msbuild .\KeepassFaviconExtractor.csproj /p:Configuration=Release /p:PackagePluginOnBuild=false
 ```
+
+## Optional: fail Build when tests fail
+
+You can run tests as part of Build and fail the build on test failures using
+`RunOnBuild`.
+
+Command line:
+
+```powershell
+msbuild .\KeepassFaviconExtractor.slnx /p:RunOnBuild=true
+```
+
+Visual Studio UI builds can use the same flag by setting it in
+`Directory.Build.props` (or in a local `.csproj.user` file):
+
+```xml
+<RunOnBuild>true</RunOnBuild>
+```
+
+Default is `true` for `Release` and `false` for non-Release configurations.
+You can still override it explicitly with `/p:RunOnBuild=true|false`.
+
+MSTest adapter resolution for build-time execution is centralized in
+`Directory.Build.props`:
+
+- `MSTestAdapterVersion` (currently `2.2.10`)
+- `MSTestAdapterPath`
+
+When upgrading MSTest adapter, update only `MSTestAdapterVersion` (or override
+`MSTestAdapterPath` directly).
