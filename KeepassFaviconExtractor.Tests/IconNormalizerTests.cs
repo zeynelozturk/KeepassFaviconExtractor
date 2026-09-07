@@ -32,6 +32,22 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void NormalizeToPng_WithPngBytesAtIcoUrl_FallsBackToImageDecode()
+        {
+            byte[] pngBytes = CreatePngBytes(24, 24, Color.Orange);
+
+            byte[] normalized = IconNormalizer.NormalizeToPng(pngBytes, string.Empty, "https://example.test/favicon.ico");
+            AssertPngSignature(normalized);
+
+            using (Bitmap bitmap = LoadBitmap(normalized))
+            {
+                Assert.AreEqual(64, bitmap.Width);
+                Assert.AreEqual(64, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(32, 32).A > 0, "Center should contain icon pixels.");
+            }
+        }
+
+        [TestMethod]
         public void NormalizeToPng_WithIco_Produces64x64Png()
         {
             byte[] icoBytes;

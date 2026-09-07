@@ -24,11 +24,12 @@ namespace FaviconExtractor
             List<Task<FaviconCandidate>> probes = new List<Task<FaviconCandidate>>();
             foreach (string domain in GetDomainCandidates(siteUri.DnsSafeHost))
             {
+                bool isExactHost = string.Equals(domain, siteUri.DnsSafeHost, StringComparison.OrdinalIgnoreCase);
                 Uri googleUri = new Uri("https://www.google.com/s2/favicons?domain=" + Uri.EscapeDataString(domain) + "&sz=64");
-                probes.Add(ProbeSingleCandidateAsync(googleUri, "external-google-s2", false, cancellationToken));
+                probes.Add(ProbeSingleCandidateAsync(googleUri, "external-google-s2", false, isExactHost, cancellationToken));
 
                 Uri faviconImUri = new Uri("https://a.favicon.im/" + Uri.EscapeDataString(domain) + "?larger=true");
-                probes.Add(ProbeSingleCandidateAsync(faviconImUri, "external-favicon-im", false, cancellationToken));
+                probes.Add(ProbeSingleCandidateAsync(faviconImUri, "external-favicon-im", false, isExactHost, cancellationToken));
             }
 
             FaviconCandidate[] results = await Task.WhenAll(probes).ConfigureAwait(false);
@@ -56,7 +57,7 @@ namespace FaviconExtractor
             return client;
         }
 
-        private static async Task<FaviconCandidate> ProbeSingleCandidateAsync(Uri requestUri, string source, bool treatAsLogo, CancellationToken cancellationToken)
+        private static async Task<FaviconCandidate> ProbeSingleCandidateAsync(Uri requestUri, string source, bool treatAsLogo, bool isExactHost, CancellationToken cancellationToken)
         {
             try
             {
@@ -89,6 +90,10 @@ namespace FaviconExtractor
                     string rel = treatAsLogo ? "logo" : "icon";
                     int score = FaviconScorer.Score("icon", type, size);
                     score = FaviconScorer.ApplyExternalServicePenalty(score);
+                    if (isExactHost)
+                    {
+                        score += FaviconDiscoveryPreferences.ExactHostScoreBonus;
+                    }
                     if (treatAsLogo)
                     {
                         score = FaviconScorer.ApplyLogoPenalty(score);
@@ -199,7 +204,8 @@ namespace FaviconExtractor
 
                 // This endpoint returns organization logos, which may be non-square.
                 // Keep these candidates tagged as logo-specific and lower-priority than favicon sources.
-                FaviconCandidate candidate = await ProbeSingleCandidateAsync(logoUri, "external-logo-hunter", true, cancellationToken).ConfigureAwait(false);
+                bool isExactHost = string.Equals(domain, siteUri.DnsSafeHost, StringComparison.OrdinalIgnoreCase);
+                FaviconCandidate candidate = await ProbeSingleCandidateAsync(logoUri, "external-logo-hunter", true, isExactHost, cancellationToken).ConfigureAwait(false);
                 if (candidate != null)
                 {
                     return candidate;

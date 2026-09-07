@@ -36,7 +36,15 @@ namespace FaviconExtractor
 
             if (IsIco(contentType, sourceUrl, sourceBytes))
             {
-                return DecodeIcoToBitmap(sourceBytes);
+                try
+                {
+                    return DecodeIcoToBitmap(sourceBytes);
+                }
+                catch (ArgumentException)
+                {
+                    // Some endpoints expose PNG/JPEG bytes from a .ico URL.
+                    // Fall back to regular image decoding when ICO parsing fails.
+                }
             }
 
             using (MemoryStream stream = new MemoryStream(sourceBytes))
