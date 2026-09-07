@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -61,7 +62,7 @@ namespace FaviconExtractor
                 return;
             }
 
-            PwEntry selectedEntry = host.MainWindow.GetSelectedEntry(true);
+            PwEntry selectedEntry = host.MainWindow.GetSelectedEntry(false);
             if (selectedEntry == null)
             {
                 MessageBox.Show(
@@ -215,10 +216,32 @@ namespace FaviconExtractor
 
                 if (activeDocument != null)
                 {
-                    mainWindow.UpdateUI(false, activeDocument, false, selectedGroup, true, entrySourceGroup, false);
+                    mainWindow.UpdateUI(false, activeDocument, true, selectedGroup, true, entrySourceGroup, true);
+                }
+
+                MethodInfo updateImageLists = mainWindow.GetType().GetMethod(
+                    "UpdateImageLists",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    new[] { typeof(bool) },
+                    null);
+                if (updateImageLists != null)
+                {
+                    updateImageLists.Invoke(mainWindow, new object[] { true });
                 }
 
                 mainWindow.RefreshEntriesList();
+
+                MethodInfo selectEntry = mainWindow.GetType().GetMethod(
+                    "SelectEntry",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    new[] { typeof(PwEntry), typeof(bool), typeof(bool), typeof(bool), typeof(bool) },
+                    null);
+                if (selectEntry != null)
+                {
+                    selectEntry.Invoke(mainWindow, new object[] { selectedEntry, true, false, true, true });
+                }
             }
             catch
             {

@@ -21,20 +21,22 @@ namespace FaviconExtractor
                 return candidates;
             }
 
+            List<Task<FaviconCandidate>> probes = new List<Task<FaviconCandidate>>();
             foreach (string domain in GetDomainCandidates(siteUri.DnsSafeHost))
             {
                 Uri googleUri = new Uri("https://www.google.com/s2/favicons?domain_url=" + Uri.EscapeDataString("https://" + domain) + "&sz=64");
-                FaviconCandidate googleCandidate = await ProbeSingleCandidateAsync(googleUri, "external-google-s2", false, cancellationToken).ConfigureAwait(false);
-                if (googleCandidate != null)
-                {
-                    candidates.Add(googleCandidate);
-                }
+                probes.Add(ProbeSingleCandidateAsync(googleUri, "external-google-s2", false, cancellationToken));
 
                 Uri faviconImUri = new Uri("https://a.favicon.im/" + Uri.EscapeDataString(domain) + "?larger=true");
-                FaviconCandidate faviconImCandidate = await ProbeSingleCandidateAsync(faviconImUri, "external-favicon-im", false, cancellationToken).ConfigureAwait(false);
-                if (faviconImCandidate != null)
+                probes.Add(ProbeSingleCandidateAsync(faviconImUri, "external-favicon-im", false, cancellationToken));
+            }
+
+            FaviconCandidate[] results = await Task.WhenAll(probes).ConfigureAwait(false);
+            for (int i = 0; i < results.Length; i++)
+            {
+                if (results[i] != null)
                 {
-                    candidates.Add(faviconImCandidate);
+                    candidates.Add(results[i]);
                 }
             }
 
@@ -78,7 +80,7 @@ namespace FaviconExtractor
                         return null;
                     }
 
-                    Size? size = await TryReadImageSizeAsync(response, type, finalUri).ConfigureAwait(false);
+                    Size? size = null;
                     string rel = treatAsLogo ? "logo" : "icon";
                     int score = FaviconScorer.Score("icon", type, size);
                     score = FaviconScorer.ApplyExternalServicePenalty(score);
@@ -101,61 +103,17 @@ namespace FaviconExtractor
             }
             catch (OperationCanceledException)
             {
-                throw;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static async Task<Size?> TryReadImageSizeAsync(HttpResponseMessage response, string type, Uri uri)
-        {
-            if (response == null || response.Content == null)
-            {
-                return null;
-            }
-
-            long? contentLength = response.Content.Headers != null ? response.Content.Headers.ContentLength : null;
-            if (contentLength.HasValue && contentLength.Value > FaviconDiscoveryPreferences.MaxIconDownloadBytes)
-            {
-                return null;
-            }
-
-            byte[] bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-            if (bytes == null || bytes.Length == 0 || bytes.Length > FaviconDiscoveryPreferences.MaxIconDownloadBytes)
-            {
-                return null;
-            }
-
-            if (IsSvg(type, uri))
-            {
-                return null;
-            }
-
-            try
-            {
-                using (MemoryStream stream = new MemoryStream(bytes))
-                using (Image image = Image.FromStream(stream, true, true))
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    return new Size(image.Width, image.Height);
+                    throw;
                 }
+
+                return null;
             }
             catch
             {
                 return null;
             }
-        }
-
-        private static bool IsSvg(string type, Uri uri)
-        {
-            if (!string.IsNullOrWhiteSpace(type) && type.IndexOf("svg", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return true;
-            }
-
-            string absolute = uri.AbsoluteUri;
-            return absolute.EndsWith(".svg", StringComparison.OrdinalIgnoreCase);
         }
 
         internal static IReadOnlyList<string> GetDomainCandidates(string host)
