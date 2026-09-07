@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 using System.Threading;
@@ -125,7 +126,7 @@ namespace FaviconExtractor
                 sb.AppendLine(FormatCandidate(result.BestCandidate));
                 sb.AppendLine();
 
-                await TryAssignBestCandidateToEntryAsync(selectedEntry, result.BestCandidate, sb);
+                await TryAssignCandidatesToEntryAsync(selectedEntry, result.Candidates, sb);
             }
 
             if (result.Candidates.Count > 0)
@@ -149,7 +150,7 @@ namespace FaviconExtractor
                 MessageBoxIcon.Information);
         }
 
-        private async System.Threading.Tasks.Task TryAssignBestCandidateToEntryAsync(PwEntry selectedEntry, FaviconCandidate bestCandidate, StringBuilder sb)
+        private async System.Threading.Tasks.Task TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, StringBuilder sb)
         {
             PwDatabase database = host.Database;
             if (database == null || !database.IsOpen)
@@ -159,37 +160,62 @@ namespace FaviconExtractor
                 return;
             }
 
-            try
+            if (candidates == null || candidates.Count == 0)
             {
-                byte[] sourceBytes = await FaviconImageDownloader
-                    .DownloadAsync(bestCandidate.IconUri, CancellationToken.None)
-                    .ConfigureAwait(true);
-
-                byte[] normalizedPng = IconNormalizer.NormalizeToPng(
-                    sourceBytes,
-                    bestCandidate.TypeAttribute,
-                    bestCandidate.IconUri.AbsoluteUri);
-
-                PwUuid assignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(
-                    database,
-                    selectedEntry,
-                    normalizedPng);
-
-                RefreshEntryListIcons(selectedEntry);
-
-                sb.AppendLine("Assigned custom icon to entry.");
-                sb.AppendLine("Assigned icon UUID: " + assignedUuid);
-                sb.AppendLine("Normalized PNG size: " + normalizedPng.Length + " bytes");
+                sb.AppendLine("Assignment skipped: no ranked candidates to assign.");
                 sb.AppendLine();
+                return;
             }
-            catch (Exception ex)
-            {
-                sb.AppendLine("Assignment failed: " + ex.Message);
-                sb.AppendLine();
 
+            Exception lastError = null;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                FaviconCandidate candidate = candidates[i];
+                if (candidate == null || candidate.IconUri == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    byte[] sourceBytes = await FaviconImageDownloader
+                        .DownloadAsync(candidate.IconUri, CancellationToken.None)
+                        .ConfigureAwait(true);
+
+                    byte[] normalizedPng = IconNormalizer.NormalizeToPng(
+                        sourceBytes,
+                        candidate.TypeAttribute,
+                        candidate.IconUri.AbsoluteUri);
+
+                    PwUuid assignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(
+                        database,
+                        selectedEntry,
+                        normalizedPng);
+
+                    RefreshEntryListIcons(selectedEntry);
+
+                    sb.AppendLine("Assigned custom icon to entry.");
+                    sb.AppendLine("Assigned from candidate #" + (i + 1) + ": " + candidate.IconUri);
+                    sb.AppendLine("Assigned icon UUID: " + assignedUuid);
+                    sb.AppendLine("Normalized PNG size: " + normalizedPng.Length + " bytes");
+                    sb.AppendLine();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    sb.AppendLine("Candidate #" + (i + 1) + " failed: " + ex.Message);
+                }
+            }
+
+            sb.AppendLine("Assignment failed: all candidates failed.");
+            sb.AppendLine();
+
+            if (lastError != null)
+            {
                 MessageBox.Show(
                     host.MainWindow,
-                    "Icon assignment failed: " + ex.Message,
+                    "Icon assignment failed for all candidates. Last error: " + lastError.Message,
                     "FaviconExtractor",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);

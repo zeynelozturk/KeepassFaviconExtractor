@@ -150,5 +150,43 @@ namespace FaviconExtractor
 
             CollectionAssert.AreEqual(new[] { "example.com" }, candidates);
         }
+
+        [TestMethod]
+        public void ShouldTryExternalFallback_WithTinyBestHtmlIcon_ReturnsTrue()
+        {
+            var htmlCandidates = new[]
+            {
+                new FaviconCandidate
+                {
+                    Source = "html-link",
+                    IconUri = new Uri("https://example.test/favicon.ico"),
+                    BestSize = new Size(16, 16),
+                    Score = 470
+                }
+            };
+
+            bool shouldTry = FaviconDiscoveryService.ShouldTryExternalFallback(htmlCandidates);
+
+            Assert.IsTrue(shouldTry);
+        }
+
+        [TestMethod]
+        public void ShouldTryExternalFallback_WithLargerBestHtmlIcon_ReturnsFalse()
+        {
+            var htmlCandidates = new[]
+            {
+                new FaviconCandidate
+                {
+                    Source = "html-link",
+                    IconUri = new Uri("https://example.test/icon-64.png"),
+                    BestSize = new Size(64, 64),
+                    Score = 730
+                }
+            };
+
+            bool shouldTry = FaviconDiscoveryService.ShouldTryExternalFallback(htmlCandidates);
+
+            Assert.IsFalse(shouldTry);
+        }
     }
 }

@@ -10,6 +10,8 @@ namespace FaviconExtractor
     internal static class FaviconDiscoveryService
     {
         private static readonly Regex BlockedStatusCodePattern = new Regex("\\b(401|403|429)\\b", RegexOptions.Compiled);
+        private const int SmallHtmlIconThreshold = 24;
+        private const int SmallHtmlIconScorePenalty = 260;
 
         public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl)
         {
@@ -53,7 +55,7 @@ namespace FaviconExtractor
                     }
                 }
 
-                if (mergedCandidates.Count == 0 && !timedOut)
+                if (ShouldTryExternalFallback(level1Result != null ? level1Result.Candidates : null) && !timedOut)
                 {
                     try
                     {
@@ -111,6 +113,7 @@ namespace FaviconExtractor
 
                 List<FaviconCandidate> ranked = mergedCandidates
                     .Where(c => c != null && c.IconUri != null)
+                    .Select(ApplySelectionAdjustments)
                     .GroupBy(c => c.IconUri.AbsoluteUri, StringComparer.OrdinalIgnoreCase)
                     .Select(g => g.OrderByDescending(c => c.Score).First())
                     .OrderByDescending(c => c.Score)
@@ -147,6 +150,26 @@ namespace FaviconExtractor
             return !string.IsNullOrWhiteSpace(level1Error) && BlockedStatusCodePattern.IsMatch(level1Error);
         }
 
+        internal static bool ShouldTryExternalFallback(IReadOnlyList<FaviconCandidate> htmlCandidates)
+        {
+            if (htmlCandidates == null || htmlCandidates.Count == 0)
+            {
+                return true;
+            }
+
+            FaviconCandidate bestHtml = htmlCandidates
+                .Where(c => c != null && c.IconUri != null)
+                .OrderByDescending(c => c.Score)
+                .FirstOrDefault();
+
+            if (bestHtml == null)
+            {
+                return true;
+            }
+
+            return IsSmallSizedIcon(bestHtml, SmallHtmlIconThreshold);
+        }
+
         private static bool ShouldTryLogoFallback(List<FaviconCandidate> candidates)
         {
             if (candidates == null || candidates.Count == 0)
@@ -167,6 +190,38 @@ namespace FaviconExtractor
             }
 
             return true;
+        }
+
+        private static FaviconCandidate ApplySelectionAdjustments(FaviconCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return null;
+            }
+
+            if (IsHtmlCandidate(candidate) && IsSmallSizedIcon(candidate, SmallHtmlIconThreshold))
+            {
+                candidate.Score -= SmallHtmlIconScorePenalty;
+            }
+
+            return candidate;
+        }
+
+        private static bool IsHtmlCandidate(FaviconCandidate candidate)
+        {
+            return candidate != null &&
+                string.Equals(candidate.Source, "html-link", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSmallSizedIcon(FaviconCandidate candidate, int maxSize)
+        {
+            if (candidate == null || !candidate.BestSize.HasValue)
+            {
+                return false;
+            }
+
+            int maxSide = Math.Max(candidate.BestSize.Value.Width, candidate.BestSize.Value.Height);
+            return maxSide > 0 && maxSide <= maxSize;
         }
     }
 }
