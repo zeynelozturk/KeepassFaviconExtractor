@@ -109,6 +109,23 @@ try {
 		$writer.Dispose()
 	}
 
+	$hintPaths = $plgxXml.SelectNodes('//m:Reference[m:HintPath]/m:HintPath', $plgxNs) |
+		ForEach-Object { $_.InnerText } |
+		Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+		Sort-Object -Unique
+
+	foreach ($hintPath in $hintPaths) {
+		$sourceDependencyPath = Join-Path $repoRoot $hintPath
+		if (-not (Test-Path $sourceDependencyPath)) {
+			throw "Referenced dependency not found: $sourceDependencyPath"
+		}
+
+		$stageDependencyPath = Join-Path $stageProjectDir $hintPath
+		$stageDependencyDir = Split-Path $stageDependencyPath -Parent
+		New-Item -ItemType Directory -Path $stageDependencyDir -Force | Out-Null
+		Copy-Item $sourceDependencyPath $stageDependencyPath -Force
+	}
+
 	$keepassAssembly = [Reflection.Assembly]::LoadFrom($keepassExe)
 	$plgxType = $keepassAssembly.GetType('KeePass.Plugins.PlgxPlugin', $true)
 	$createMethod = $plgxType.GetMethod('CreateFromDirectory', [Reflection.BindingFlags]'NonPublic,Static', $null, [Type[]]@([string]), $null)
