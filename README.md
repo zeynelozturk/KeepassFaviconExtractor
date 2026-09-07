@@ -33,3 +33,25 @@ MSBuild property:
 
 ```powershell
 msbuild .\KeepassFaviconExtractor.csproj /p:KeePassDir="C:\Path\To\KeePass"
+```
+
+## Build a PLGX package (for KeePass-side compilation)
+
+Create a testable PLGX package:
+
+```powershell
+.\scripts\build-plgx.ps1
+```
+
+If your runtime KeePass is elsewhere:
+
+```powershell
+.\scripts\build-plgx.ps1 -KeePassExePath "C:\Path\To\KeePass\KeePass.exe"
+```
+
+This creates:
+
+`dist\KeePassFaviconExtractor.plgx`
+
+To test it, copy the `.plgx` file into your KeePass `Plugins` directory and
+restart KeePass.

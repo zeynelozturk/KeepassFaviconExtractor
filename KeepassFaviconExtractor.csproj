@@ -7,8 +7,8 @@
     <ProjectGuid>{3117A0A6-6D2A-4831-86EA-0F0092DEA706}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>KeepassFaviconExtractor</RootNamespace>
-    <AssemblyName>KeepassFaviconExtractor</AssemblyName>
+    <RootNamespace>KeePassFaviconExtractor</RootNamespace>
+    <AssemblyName>KeePassFaviconExtractor</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <KeePassDir Condition="'$(KeePassDir)' == ''">$(MSBuildProjectDirectory)\.deps\KeePass\2.61</KeePassDir>
     <FileAlignment>512</FileAlignment>
@@ -83,14 +83,19 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="KeePassFaviconExtractorExt.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="AGENTS.md" />
     <None Include="app.config" />
     <None Include="packages.config" />
+    <None Include="plgx\KeePassFaviconExtractor.csproj" />
+    <None Include="scripts\build-plgx.ps1" />
   </ItemGroup>
   <Target Name="ValidateKeePassReference" BeforeTargets="ResolveAssemblyReferences">
     <Error Condition="!Exists('$(KeePassDir)\KeePass.exe')" Text="KeePass.exe was not found at '$(KeePassDir)\KeePass.exe'. Run scripts\bootstrap-keepass.ps1 or set the KeePassDir MSBuild property to your KeePass 2.61 directory." />
