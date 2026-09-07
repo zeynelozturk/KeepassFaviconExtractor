@@ -1,0 +1,2 @@
+- Optional automatic finding of favicon upon adding new entry.
+- If there is no URL, the plugin can just offer a logo it found depending on the entry's title or other metadata.

@@ -15,7 +15,9 @@ The goal is not merely to support standards-compliant favicons. The plugin shoul
 - Add a configurable favicon-fetching feature.
 - Detect URLs from KeePass entries.
 - Avoid modifying the entry's URL or other user data.
-- Store downloaded/converted icons using KeePass's appropriate icon mechanism where practical.
+- Store normalized icons in the active database's KeePass custom-icon collection.
+- Assign custom icons to entries using their KeePass custom-icon UUIDs.
+- Reuse a single custom icon across entries when their normalized PNG data is identical.
 - Avoid repeatedly downloading the same favicon.
 
 ## 2. Favicon discovery pipeline
@@ -207,11 +209,20 @@ The first candidate that passes validation is not necessarily the best candidate
 
 Collect candidates and select the highest-quality usable icon.
 
-## 10. Caching
+## 10. KeePass icon storage and caching
 
-Implement a persistent favicon cache.
+Use KeePass's database-level custom icon store as the authoritative persistent store for icon image data.
 
-Cache key should be based on the normalized website origin/domain rather than the complete page URL where appropriate.
+- Store normalized PNG bytes as KeePass custom icons in the active database.
+- Assign the resulting custom-icon UUID to each applicable entry.
+- Allow multiple entries to reference the same custom-icon UUID.
+- Hash normalized PNG data and reuse an existing matching custom icon instead of adding duplicate image data.
+- Mark the database as modified and request the appropriate KeePass icon/UI refresh after making changes.
+- Do not delete or replace custom icons without accounting for references from entries, groups, and entry history.
+
+Do not create a separate persistent filesystem cache containing duplicate favicon image data.
+
+Use an in-memory lookup during a plugin session to avoid repeated work. The lookup key should be based on the normalized website origin/domain rather than the complete page URL where appropriate.
 
 For example:
 
@@ -221,18 +232,20 @@ and
 
 `https://www.example.com/b`
 
-should normally be able to share the same favicon.
+should normally be able to share the same favicon and custom-icon UUID.
 
-Store:
+For the initial version, treat an existing assigned custom icon as cached and provide explicit force-refresh behavior.
+
+If automatic expiration or revalidation is added, store only the required metadata in database-scoped KeePass custom data, using plugin-specific keys. Optional metadata may include:
 
 - normalized host/origin
-- favicon data
+- custom-icon UUID or normalized image hash
 - source URL
 - acquisition method
 - timestamp
 - optional failure timestamp
 
-Implement expiration/revalidation.
+Do not store credentials or complete KeePass entry data in cache metadata.
 
 Avoid fetching the same site's favicon every time KeePass starts.
 
@@ -346,8 +359,12 @@ Suggested components:
 `IconNormalizer`
 - produces final normalized icon
 
-`FaviconCache`
-- persistent cache
+`KeePassIconStore`
+- stores normalized PNG icons in the active database's custom-icon collection
+- deduplicates icons and assigns custom-icon UUIDs to entries
+
+`FaviconMetadataStore`
+- optionally stores database-scoped source and revalidation metadata
 
 `FaviconScorer`
 - candidate ranking
@@ -382,6 +399,12 @@ Create tests for at least:
 - domains containing unusual characters
 - URLs containing paths/query strings
 - websites with no favicon
+- storing a normalized PNG as a KeePass custom icon
+- assigning a custom-icon UUID to an entry
+- reusing an existing icon with identical normalized PNG data
+- sharing one custom icon across entries from the same site
+- preserving icons referenced by entries, groups, or entry history
+- force-refreshing an existing assigned icon
 
 Include integration tests where practical, but keep unit tests independent of external websites.
 
