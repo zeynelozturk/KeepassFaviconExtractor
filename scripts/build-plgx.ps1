@@ -25,7 +25,7 @@ $outputDir = Split-Path $outputFile -Parent
 $keepassExe = [IO.Path]::GetFullPath($KeePassExePath)
 
 $sourceFiles = @(
-	(Join-Path $repoRoot 'KeePassFaviconExtractorExt.cs'),
+	(Join-Path $repoRoot 'FaviconExtractorExt.cs'),
 	(Join-Path $repoRoot 'Properties\AssemblyInfo.cs'),
 	(Join-Path $repoRoot 'plgx\FaviconExtractor.csproj')
 )
@@ -48,7 +48,7 @@ try {
 	New-Item -ItemType Directory -Path $stageProjectDir | Out-Null
 	New-Item -ItemType Directory -Path (Join-Path $stageProjectDir 'Properties') | Out-Null
 
-	Copy-Item (Join-Path $repoRoot 'KeePassFaviconExtractorExt.cs') (Join-Path $stageProjectDir 'KeePassFaviconExtractorExt.cs')
+	Copy-Item (Join-Path $repoRoot 'FaviconExtractorExt.cs') (Join-Path $stageProjectDir 'FaviconExtractorExt.cs')
 	Copy-Item (Join-Path $repoRoot 'Properties\AssemblyInfo.cs') (Join-Path $stageProjectDir 'Properties\AssemblyInfo.cs')
 	Copy-Item (Join-Path $repoRoot 'plgx\FaviconExtractor.csproj') (Join-Path $stageProjectDir 'FaviconExtractor.csproj')
 

@@ -13,7 +13,7 @@
 	<Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
-	<Compile Include="KeePassFaviconExtractorExt.cs" />
+	<Compile Include="FaviconExtractorExt.cs" />
 	<Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
 </Project>
