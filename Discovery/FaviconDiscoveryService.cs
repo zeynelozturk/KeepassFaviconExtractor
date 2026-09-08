@@ -18,6 +18,11 @@ namespace FaviconExtractor
 
         public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl)
         {
+            return await DiscoverAsync(inputUrl, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl, CancellationToken cancellationToken)
+        {
             Uri inputUri;
             if (!Uri.TryCreate(inputUrl, UriKind.Absolute, out inputUri) ||
                 (inputUri.Scheme != Uri.UriSchemeHttp && inputUri.Scheme != Uri.UriSchemeHttps))
@@ -30,7 +35,8 @@ namespace FaviconExtractor
             bool timedOut = false;
             string discoveryNote = null;
 
-            using (CancellationTokenSource cts = new CancellationTokenSource(FaviconDiscoveryPreferences.TotalDiscoveryTimeout))
+            using (CancellationTokenSource timeoutCts = new CancellationTokenSource(FaviconDiscoveryPreferences.TotalDiscoveryTimeout))
+            using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
             {
                 try
                 {
@@ -38,6 +44,7 @@ namespace FaviconExtractor
                 }
                 catch (OperationCanceledException)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     timedOut = true;
                     level1Error = "Timed out while fetching page HTML.";
                 }
@@ -69,6 +76,7 @@ namespace FaviconExtractor
                     }
                     catch (OperationCanceledException)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         timedOut = true;
                     }
                 }
@@ -87,6 +95,7 @@ namespace FaviconExtractor
                     }
                     catch (OperationCanceledException)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         timedOut = true;
                     }
                 }
@@ -110,6 +119,7 @@ namespace FaviconExtractor
                     }
                     catch (OperationCanceledException)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         timedOut = true;
                     }
                 }
