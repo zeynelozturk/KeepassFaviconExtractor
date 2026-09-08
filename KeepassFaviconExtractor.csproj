@@ -124,6 +124,7 @@
     <None Include="packages.config" />
     <None Include="plgx\FaviconExtractor.csproj" />
     <None Include="scripts\bootstrap-keepass.ps1" />
+    <None Include="scripts\bootstrap-native-webp.ps1" />
     <None Include="scripts\build-plgx.ps1" />
     <None Include="scripts\build-release.ps1" />
   </ItemGroup>

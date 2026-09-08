@@ -1,4 +1,13 @@
 <Project>
+	<Target Name="ValidateNativeWebpBinaries"
+		  BeforeTargets="BeforeBuild"
+		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor' and '$(SkipNativeWebpCheck)' != 'true' and '$(DesignTimeBuild)' != 'true'">
+	<Error Condition="!Exists('$(MSBuildProjectDirectory)\native\x86\libwebp.dll')"
+		   Text="Missing native dependency: 'native\x86\libwebp.dll'. Run '.\scripts\bootstrap-native-webp.ps1' or build with /p:SkipNativeWebpCheck=true." />
+	<Error Condition="!Exists('$(MSBuildProjectDirectory)\native\x64\libwebp.dll')"
+		   Text="Missing native dependency: 'native\x64\libwebp.dll'. Run '.\scripts\bootstrap-native-webp.ps1' or build with /p:SkipNativeWebpCheck=true." />
+  </Target>
+
   <Target Name="RunTestsOnBuild"
 		  AfterTargets="Build"
 		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor.Tests' and Exists('$(TargetPath)') and ( '$(RunOnBuild)' == 'true' or ( '$(RunOnBuild)' == '' and '$(Configuration)' == 'Release' ) )">

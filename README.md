@@ -50,6 +50,18 @@ WEBP decoding uses native `libwebp.dll` files. Place them locally at:
 The project is configured to copy these DLLs to the output directory.
 These binaries are intentionally ignored by Git in this repository.
 
+By default, builds fail fast if these DLLs are missing. To bootstrap them:
+
+```powershell
+.\scripts\bootstrap-native-webp.ps1
+```
+
+If you need to bypass the check temporarily:
+
+```powershell
+msbuild .\KeepassFaviconExtractor.slnx /p:SkipNativeWebpCheck=true
+```
+
 To build against an existing KeePass 2.61 installation instead, override the
 MSBuild property:
 
