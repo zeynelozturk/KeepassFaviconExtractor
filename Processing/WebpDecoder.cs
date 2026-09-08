@@ -1,13 +1,18 @@
 using System;
-using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace FaviconExtractor
 {
     internal static class WebpDecoder
     {
+        private static readonly object NativeLoadSync = new object();
+        private static bool nativeLoadAttempted;
+        private static IntPtr nativeModuleHandle;
+
         public static bool LooksLikeWebp(byte[] data)
         {
             if (data == null || data.Length < 12)
@@ -31,6 +36,8 @@ namespace FaviconExtractor
             {
                 throw new ArgumentException("WEBP source bytes are empty.", nameof(webpBytes));
             }
+
+            EnsureNativeLoaded();
 
             int width;
             int height;
@@ -103,6 +110,67 @@ namespace FaviconExtractor
             }
         }
 
+        private static void EnsureNativeLoaded()
+        {
+            if (nativeModuleHandle != IntPtr.Zero || nativeLoadAttempted)
+            {
+                return;
+            }
+
+            lock (NativeLoadSync)
+            {
+                if (nativeModuleHandle != IntPtr.Zero || nativeLoadAttempted)
+                {
+                    return;
+                }
+
+                nativeLoadAttempted = true;
+
+                string architectureFolder = Environment.Is64BitProcess ? "x64" : "x86";
+                foreach (string candidatePath in EnumerateNativeLibraryPaths(architectureFolder))
+                {
+                    if (!File.Exists(candidatePath))
+                    {
+                        continue;
+                    }
+
+                    IntPtr handle = LoadLibrary(candidatePath);
+                    if (handle != IntPtr.Zero)
+                    {
+                        nativeModuleHandle = handle;
+                        return;
+                    }
+                }
+            }
+        }
+
+        private static System.Collections.Generic.IEnumerable<string> EnumerateNativeLibraryPaths(string architectureFolder)
+        {
+            string fileName = "libwebp.dll";
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
+            string assemblyDirectory = Path.GetDirectoryName(typeof(WebpDecoder).Assembly.Location) ?? string.Empty;
+
+            yield return Path.Combine(baseDirectory, fileName);
+            yield return Path.Combine(baseDirectory, "native", architectureFolder, fileName);
+
+            if (!string.Equals(assemblyDirectory, baseDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return Path.Combine(assemblyDirectory, fileName);
+                yield return Path.Combine(assemblyDirectory, "native", architectureFolder, fileName);
+            }
+
+            foreach (string root in new[] { baseDirectory, assemblyDirectory })
+            {
+                string current = root;
+                for (int i = 0; i < 8 && !string.IsNullOrWhiteSpace(current); i++)
+                {
+                    yield return Path.Combine(current, "native", architectureFolder, fileName);
+                    DirectoryInfo parent = Directory.GetParent(current);
+                    current = parent != null ? parent.FullName : null;
+                }
+            }
+        }
+
         [DllImport("libwebp.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern int WebPGetInfo(byte[] data, UIntPtr data_size, out int width, out int height);
 
@@ -113,5 +181,8 @@ namespace FaviconExtractor
             IntPtr output_buffer,
             UIntPtr output_buffer_size,
             int output_stride);
+
+        [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr LoadLibrary(string lpFileName);
     }
 }

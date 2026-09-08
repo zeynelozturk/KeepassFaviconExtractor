@@ -150,6 +150,39 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void NormalizeToPng_WithValidWebpBytes_DecodesViaNativeLibwebp()
+        {
+            byte[] webpBytes = Convert.FromBase64String(
+                "UklGRqIBAABXRUJQVlA4TJUBAAAvH8AHELfCIGDbNuZPt7uJbdFA0LZtvO38IT8M27aNpOvtv26/O1uMIklSlALW/2t1sYFVQIdB/pACBDEQpQJEmYLGb3yAqnFZPI6I1xUBWQCvLQqKsIBMqKhxmCDU7RgHUIogHNMKiyoA+juAEAQx6tc/nxJpxd8VEoWsOsqvnbL6+nwqZLDCw1QSPmFKg4wkDA1ZuPXeKKMDYiTbpq25z37vG+/btm3va+Sfis/5EUT0H23btqGQuZN7RBQX+I4lhVmOH0SpQs8UxUwvTM4VjdwwijzRyosCU48Z+JL1d37xlXY5PLQlne/kODKM/lXio0dpIyP31VOg+xtbA2pPmUclx1sZStci9w2g9SrF2SPApthTQGlbVFoGZuS4BIyLkpMS9L8GQOtRzU8XSouAsSWKrQIGMPan6qUJQPVWlFtPmRd1n22g+azhrAQsaZw9AVQfNNyUgGlbwxAwDjTuvQ50vjXsAcyJhhWA/eJ95VkAKu/F88uzU4JRu4jjS167k7N3UsTX35X2LvV3/Q//gva/EgEA");
+
+            try
+            {
+                byte[] normalized = IconNormalizer.NormalizeToPng(webpBytes, "image/webp", "https://example.test/icon.webp");
+                AssertPngSignature(normalized);
+
+                using (Bitmap bitmap = LoadBitmap(normalized))
+                {
+                    Assert.AreEqual(32, bitmap.Width);
+                    Assert.AreEqual(32, bitmap.Height);
+                    Assert.IsTrue(bitmap.GetPixel(16, 16).A > 0, "Decoded WebP should produce visible icon pixels.");
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                if (ex.Message.IndexOf("native library (libwebp.dll) not found", StringComparison.OrdinalIgnoreCase) >= 0
+                    || ex.Message.IndexOf("architecture is incompatible", StringComparison.OrdinalIgnoreCase) >= 0
+                    || ex.Message.IndexOf("DLL 'libwebp.dll'", StringComparison.OrdinalIgnoreCase) >= 0
+                    || ex.InnerException is DllNotFoundException
+                    || ex.InnerException is BadImageFormatException)
+                {
+                    Assert.Inconclusive("Native WebP decoder is unavailable in this test environment: " + ex.Message);
+                }
+
+                throw;
+            }
+        }
+
+        [TestMethod]
         public void NormalizeToPng_WithNonSquareSvg_FitsIntoTargetCanvas()
         {
             const string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='16' viewBox='0 0 32 16'><rect x='0' y='0' width='32' height='16' fill='#0000ff'/></svg>";
