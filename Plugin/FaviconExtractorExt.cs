@@ -29,12 +29,15 @@ namespace FaviconExtractor
         {
             if (type == PluginMenuType.Main)
             {
-                return CreateMenuItem("Favicon Extractor...");
+                ToolStripMenuItem root = new ToolStripMenuItem("Favicon Extractor");
+                root.DropDownItems.Add(CreateMenuItem("Extract favicon", OnExtractFaviconClick));
+                root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
+                return root;
             }
 
             if (type == PluginMenuType.Entry)
             {
-                return CreateMenuItem("Fetch Favicon");
+                return CreateMenuItem("Extract favicon", OnExtractFaviconClick);
             }
 
             return null;
@@ -45,14 +48,14 @@ namespace FaviconExtractor
             host = null;
         }
 
-        private ToolStripMenuItem CreateMenuItem(string text)
+        private ToolStripMenuItem CreateMenuItem(string text, EventHandler onClick)
         {
             ToolStripMenuItem item = new ToolStripMenuItem(text);
-            item.Click += OnMenuItemClick;
+            item.Click += onClick;
             return item;
         }
 
-        private async void OnMenuItemClick(object sender, EventArgs e)
+        private async void OnExtractFaviconClick(object sender, EventArgs e)
         {
             if (host == null || host.MainWindow == null)
             {
@@ -147,6 +150,42 @@ namespace FaviconExtractor
                 host.MainWindow,
                 sb.ToString(),
                 "FaviconExtractor",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private async void OnDiagnosticsMenuItemClick(object sender, EventArgs e)
+        {
+            if (host == null || host.MainWindow == null)
+            {
+                MessageBox.Show(
+                    "Plugin host is not available.",
+                    "FaviconExtractor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            string report;
+            try
+            {
+                report = await FallbackDiagnosticsService.RunAsync(CancellationToken.None).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    host.MainWindow,
+                    "Diagnostics failed: " + ex.Message,
+                    "FaviconExtractor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            MessageBox.Show(
+                host.MainWindow,
+                report,
+                "FaviconExtractor Diagnostics",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
