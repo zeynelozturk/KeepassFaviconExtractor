@@ -22,6 +22,7 @@ namespace FaviconExtractor
         public const int LogoScorePenalty = 120;
         public const int GoogleExternalScoreBonus = 20;
         public const int DuckDuckGoExternalScoreBonus = 15;
+        public const int GoogleFaviconV2ExternalScoreBonus = 12;
         public const int FaviconeExternalScoreBonus = 10;
         public const int VemetricExternalScoreBonus = 5;
         public const int FaviconImExternalScorePenalty = 20;

@@ -320,6 +320,9 @@ namespace FaviconExtractor
                 "https://icons.duckduckgo.com/ip3/hot.mail.com.ico",
                 ExternalFaviconServiceDiscoverer.BuildProviderUri("external-duckduckgo-ip3", domain).AbsoluteUri);
             Assert.AreEqual(
+                "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://hot.mail.com&size=64",
+                ExternalFaviconServiceDiscoverer.BuildProviderUri("external-google-faviconv2", domain).AbsoluteUri);
+            Assert.AreEqual(
                 "https://favicone.com/hot.mail.com?s=128",
                 ExternalFaviconServiceDiscoverer.BuildProviderUri("external-favicone", domain).AbsoluteUri);
             Assert.AreEqual(
@@ -335,12 +338,14 @@ namespace FaviconExtractor
         {
             int google = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-google-s2");
             int duck = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-duckduckgo-ip3");
+            int googleV2 = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-google-faviconv2");
             int favicone = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-favicone");
             int vemetric = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-vemetric");
             int faviconIm = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-favicon-im");
 
             Assert.IsTrue(google > duck);
-            Assert.IsTrue(duck > favicone);
+            Assert.IsTrue(duck > googleV2);
+            Assert.IsTrue(googleV2 > favicone);
             Assert.IsTrue(favicone > vemetric);
             Assert.IsTrue(vemetric > faviconIm);
         }

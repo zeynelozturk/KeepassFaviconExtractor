@@ -160,6 +160,7 @@ namespace FaviconExtractor
         {
             "external-google-s2",
             "external-duckduckgo-ip3",
+            "external-google-faviconv2",
             "external-favicone",
             "external-vemetric",
             "external-favicon-im"
@@ -181,6 +182,11 @@ namespace FaviconExtractor
             if (string.Equals(source, "external-duckduckgo-ip3", StringComparison.OrdinalIgnoreCase))
             {
                 return new Uri("https://icons.duckduckgo.com/ip3/" + escapedDomain + ".ico");
+            }
+
+            if (string.Equals(source, "external-google-faviconv2", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Uri("https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://" + escapedDomain + "&size=64");
             }
 
             if (string.Equals(source, "external-favicone", StringComparison.OrdinalIgnoreCase))
@@ -211,6 +217,11 @@ namespace FaviconExtractor
             if (string.Equals(source, "external-duckduckgo-ip3", StringComparison.OrdinalIgnoreCase))
             {
                 return FaviconDiscoveryPreferences.DuckDuckGoExternalScoreBonus;
+            }
+
+            if (string.Equals(source, "external-google-faviconv2", StringComparison.OrdinalIgnoreCase))
+            {
+                return FaviconDiscoveryPreferences.GoogleFaviconV2ExternalScoreBonus;
             }
 
             if (string.Equals(source, "external-favicone", StringComparison.OrdinalIgnoreCase))
@@ -249,6 +260,7 @@ namespace FaviconExtractor
                 || absolute.EndsWith(".webp")
                 || absolute.EndsWith(".gif")
                 || absolute.Contains("/s2/favicons")
+                || absolute.Contains("/faviconv2")
                 || absolute.Contains("favicon.im")
                 || absolute.Contains("icons.duckduckgo.com/ip3/")
                 || absolute.Contains("favicone.com/")
@@ -258,6 +270,11 @@ namespace FaviconExtractor
         private static Uri GetCandidateIconUri(Uri requestUri, Uri finalUri, string source)
         {
             if (string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase))
+            {
+                return requestUri;
+            }
+
+            if (string.Equals(source, "external-google-faviconv2", StringComparison.OrdinalIgnoreCase))
             {
                 return requestUri;
             }
