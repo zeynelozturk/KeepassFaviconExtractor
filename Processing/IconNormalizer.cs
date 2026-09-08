@@ -92,6 +92,11 @@ namespace FaviconExtractor
 
         private static Bitmap NormalizeBitmap(Bitmap source)
         {
+            if (source.Width > 0 && source.Height > 0 && source.Width == source.Height)
+            {
+                return CloneBitmap(source);
+            }
+
             int targetSize = FaviconDiscoveryPreferences.NormalizedIconSize;
             Bitmap canvas = new Bitmap(targetSize, targetSize, PixelFormat.Format32bppArgb);
 
@@ -109,6 +114,23 @@ namespace FaviconExtractor
             }
 
             return canvas;
+        }
+
+        private static Bitmap CloneBitmap(Bitmap source)
+        {
+            Bitmap clone = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+            using (Graphics graphics = Graphics.FromImage(clone))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.CompositingMode = CompositingMode.SourceOver;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                graphics.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height));
+            }
+
+            return clone;
         }
 
         private static Rectangle CalculateDestinationRectangle(int sourceWidth, int sourceHeight, int targetWidth, int targetHeight)

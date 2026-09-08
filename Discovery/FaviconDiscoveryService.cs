@@ -14,7 +14,7 @@ namespace FaviconExtractor
         private const int SmallHtmlIconScorePenalty = 260;
         private const int SmallOrUnknownIconThresholdForAppleTouchPromotion = 32;
         private const int AppleTouchPromotionMinSize = 120;
-        private const int LargeAppleTouchScoreBonus = 260;
+        private const int LargeAppleTouchScoreBonus = 0;
 
         public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl)
         {

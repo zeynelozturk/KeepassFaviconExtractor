@@ -50,12 +50,12 @@ namespace FaviconExtractor
 
             if (normalized.Contains(" apple-touch-icon "))
             {
-                return 200;
+                return 20;
             }
 
             if (normalized.Contains(" apple-touch-icon-precomposed "))
             {
-                return 180;
+                return 10;
             }
 
             if (normalized.Contains(" mask-icon "))

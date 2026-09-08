@@ -7,7 +7,7 @@ namespace FaviconExtractor
     {
         public static readonly int[] PreferredIconSizes = new[] { 64, 32, 16 };
         public static readonly TimeSpan TotalDiscoveryTimeout = TimeSpan.FromSeconds(12);
-        public static readonly TimeSpan HtmlRequestTimeout = TimeSpan.FromSeconds(4);
+        public static readonly TimeSpan HtmlRequestTimeout = TimeSpan.FromSeconds(3);
         public static readonly TimeSpan FallbackProbeTimeout = TimeSpan.FromSeconds(2);
         public static readonly TimeSpan IconDownloadTimeout = TimeSpan.FromSeconds(8);
         public const int MaxAutomaticRedirects = 6;

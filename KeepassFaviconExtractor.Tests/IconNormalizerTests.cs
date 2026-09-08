@@ -13,7 +13,7 @@ namespace FaviconExtractor
     public class IconNormalizerTests
     {
         [TestMethod]
-        public void NormalizeToPng_WithTinyPng_UpscalesForVisibility()
+        public void NormalizeToPng_WithSquarePng_PreservesOriginalDimensions()
         {
             byte[] pngBytes = CreatePngBytes(16, 16, Color.Red);
 
@@ -22,16 +22,14 @@ namespace FaviconExtractor
 
             using (Bitmap bitmap = LoadBitmap(normalized))
             {
-                Assert.AreEqual(64, bitmap.Width);
-                Assert.AreEqual(64, bitmap.Height);
-
-                Assert.IsTrue(bitmap.GetPixel(0, 0).A > 0, "Tiny sources should be upscaled to fill the canvas for visibility.");
-                Assert.IsTrue(bitmap.GetPixel(32, 32).A > 0, "Center should contain icon pixels.");
+                Assert.AreEqual(16, bitmap.Width);
+                Assert.AreEqual(16, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(8, 8).A > 0, "Center should contain icon pixels.");
             }
         }
 
         [TestMethod]
-        public void NormalizeToPng_WithSmallButNotTinyPng_RemainsCenteredWithoutUpscale()
+        public void NormalizeToPng_WithSquare32Png_PreservesOriginalDimensions()
         {
             byte[] pngBytes = CreatePngBytes(32, 32, Color.Red);
 
@@ -40,11 +38,9 @@ namespace FaviconExtractor
 
             using (Bitmap bitmap = LoadBitmap(normalized))
             {
-                Assert.AreEqual(64, bitmap.Width);
-                Assert.AreEqual(64, bitmap.Height);
-
-                Assert.AreEqual(0, bitmap.GetPixel(0, 0).A, "Corners should remain transparent when source is above tiny-upscale threshold.");
-                Assert.IsTrue(bitmap.GetPixel(32, 32).A > 0, "Center should contain icon pixels.");
+                Assert.AreEqual(32, bitmap.Width);
+                Assert.AreEqual(32, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(16, 16).A > 0, "Center should contain icon pixels.");
             }
         }
 
@@ -58,9 +54,9 @@ namespace FaviconExtractor
 
             using (Bitmap bitmap = LoadBitmap(normalized))
             {
-                Assert.AreEqual(64, bitmap.Width);
-                Assert.AreEqual(64, bitmap.Height);
-                Assert.IsTrue(bitmap.GetPixel(32, 32).A > 0, "Center should contain icon pixels.");
+                Assert.AreEqual(24, bitmap.Width);
+                Assert.AreEqual(24, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(12, 12).A > 0, "Center should contain icon pixels.");
             }
         }
 
@@ -79,8 +75,8 @@ namespace FaviconExtractor
 
             using (Bitmap bitmap = LoadBitmap(normalized))
             {
-                Assert.AreEqual(64, bitmap.Width);
-                Assert.AreEqual(64, bitmap.Height);
+                Assert.IsTrue(bitmap.Width > 0, "ICO decode should produce a non-empty image.");
+                Assert.AreEqual(bitmap.Width, bitmap.Height, "Square ICO should remain square.");
             }
         }
 
