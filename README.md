@@ -1,18 +1,29 @@
 # KeePassFaviconExtractor
 
-> ⚠️ Work in progress — not ready for use
-
 A KeePass 2 plugin that attempts to find, download, convert, and cache
 website favicons using multiple discovery methods.
 
-## Status
+## Feature highlights
 
-This project is currently under active development.
+- Entry and main-menu integration in KeePass (`Extract favicon` and `Diagnostics`).
+- Multi-source favicon discovery with ranked candidate selection.
+- Automatic retries for transient external-provider failures.
+- SVG, ICO, PNG, and common web image handling with normalization to KeePass-compatible PNG.
+- Defensive SVG conversion that rejects suspicious/cropped render output and falls back.
+- Live extraction status window with cancel support, failure-only retry button, and auto-close on success.
+- Diagnostics window with streaming probe output and per-provider summaries.
 
-The plugin may not compile or function correctly yet. APIs and
-implementation details may change substantially.
+## Fallback strategy and reliability
 
-Do not use this version with important KeePass databases.
+The plugin does not depend on a single source. It progressively tries:
+
+1. HTML `<link rel="icon">` candidates from the target page.
+2. External favicon providers (Google S2, DuckDuckGo, Google faviconV2, and others).
+3. Additional rescue/fallback probes when higher-ranked candidates fail.
+
+If one provider is unavailable, the next sources are tried automatically.
+This layered approach gives a high likelihood of finding an icon for most sites,
+while still failing safely when conversion output is suspicious or unusable.
 
 ## Development setup
 

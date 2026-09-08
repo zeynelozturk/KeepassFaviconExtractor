@@ -12,6 +12,16 @@ namespace FaviconExtractor
 {
     internal static class IconNormalizer
     {
+        private const int SvgAnalysisCanvasSize = 512;
+        private const int SvgRawRenderCanvasSize = 1024;
+        private const byte OpaqueAlphaThreshold = 8;
+        private const double MinOpaquePixelRatio = 0.0005d;
+        private const double MinContentAreaRatio = 0.01d;
+        private const double MaxContentAspectRatio = 10.0d;
+        private const double OppositeMarginSuspicionRatio = 0.20d;
+        private const double MaxCenterOffsetSuspicionRatio = 0.35d;
+        private const double ExcessMarginRatioForTrim = 0.55d;
+
         public static byte[] NormalizeToPng(byte[] sourceBytes, string contentType, string sourceUrl)
         {
             return NormalizeToPng(sourceBytes, contentType, sourceUrl, CancellationToken.None);
@@ -42,7 +52,7 @@ namespace FaviconExtractor
         {
             if (isSvgSource)
             {
-                return DecodeSvgToBitmap(sourceBytes, cancellationToken);
+                return DecodeSvgToBitmap(sourceBytes, sourceUrl, cancellationToken);
             }
 
             if (IsIco(contentType, sourceUrl, sourceBytes))
@@ -65,9 +75,9 @@ namespace FaviconExtractor
             }
         }
 
-        private static Bitmap DecodeSvgToBitmap(byte[] svgBytes, CancellationToken cancellationToken)
+        private static Bitmap DecodeSvgToBitmap(byte[] svgBytes, string sourceUrl, CancellationToken cancellationToken)
         {
-            return RunInStaThread(delegate
+            using (Bitmap renderedBitmap = RunInStaThread(delegate
             {
                 WpfDrawingSettings settings = new WpfDrawingSettings();
                 settings.IncludeRuntime = false;
@@ -88,7 +98,297 @@ namespace FaviconExtractor
                         return new Bitmap(image);
                     }
                 }
-            }, cancellationToken, FaviconDiscoveryPreferences.SvgStaOperationTimeout);
+            }, cancellationToken, FaviconDiscoveryPreferences.SvgStaOperationTimeout))
+            using (Bitmap rawRenderCanvas = CreateFittedCanvas(renderedBitmap, SvgRawRenderCanvasSize, SvgRawRenderCanvasSize))
+            {
+                return ValidateAndPrepareSvgBitmap(rawRenderCanvas, sourceUrl, cancellationToken);
+            }
+        }
+
+        private static Bitmap ValidateAndPrepareSvgBitmap(Bitmap svgBitmap, string sourceUrl, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            OpaqueMetrics sourceMetrics = MeasureOpaqueMetrics(svgBitmap);
+            string suspicionReason = GetSuspiciousSvgReason(sourceMetrics, svgBitmap.Width, svgBitmap.Height);
+            if (!string.IsNullOrEmpty(suspicionReason))
+            {
+                if (FaviconDiscoveryPreferences.EnableSvgDebugRenderDump)
+                {
+                    string dumpPath = TrySaveSvgDebugRender(svgBitmap, sourceUrl);
+                    if (!string.IsNullOrWhiteSpace(dumpPath))
+                    {
+                        throw new InvalidOperationException("SVG conversion failed: " + suspicionReason + " Raw render saved: " + dumpPath);
+                    }
+                }
+
+                throw new InvalidOperationException("SVG conversion failed: " + suspicionReason);
+            }
+
+            using (Bitmap analysisBitmap = CreateFittedCanvas(svgBitmap, SvgAnalysisCanvasSize, SvgAnalysisCanvasSize))
+            {
+                OpaqueMetrics metrics = MeasureOpaqueMetrics(analysisBitmap);
+
+                if (!metrics.HasVisibleContent)
+                {
+                    throw new InvalidOperationException("SVG conversion failed: rendered bitmap is empty.");
+                }
+
+                if (metrics.OpaquePixelRatio < MinOpaquePixelRatio)
+                {
+                    throw new InvalidOperationException("SVG conversion failed: rendered bitmap is near-empty.");
+                }
+
+                if (metrics.ContentAreaRatio < MinContentAreaRatio)
+                {
+                    throw new InvalidOperationException("SVG conversion failed: rendered content is too small for icon usage.");
+                }
+
+                if (metrics.ContentAspectRatio > MaxContentAspectRatio)
+                {
+                    throw new InvalidOperationException("SVG conversion failed: rendered content aspect ratio is abnormal.");
+                }
+
+                if (LooksLikeBoundaryClipping(metrics, analysisBitmap.Width, analysisBitmap.Height))
+                {
+                    throw new InvalidOperationException("SVG conversion failed: rendered content appears clipped by canvas boundaries.");
+                }
+            }
+
+            if (ShouldTrimTransparentMargins(sourceMetrics, svgBitmap.Width, svgBitmap.Height))
+            {
+                return CropToOpaqueBounds(svgBitmap, sourceMetrics.Bounds);
+            }
+
+            return new Bitmap(svgBitmap);
+        }
+
+        private static string GetSuspiciousSvgReason(OpaqueMetrics metrics, int width, int height)
+        {
+            if (!metrics.HasVisibleContent)
+            {
+                return "rendered bitmap is empty";
+            }
+
+            if (metrics.OpaquePixelRatio < MinOpaquePixelRatio)
+            {
+                return "rendered bitmap is near-empty";
+            }
+
+            if (metrics.ContentAreaRatio < MinContentAreaRatio)
+            {
+                return "rendered content is too small for icon usage";
+            }
+
+            if (metrics.ContentAspectRatio > MaxContentAspectRatio)
+            {
+                return "rendered content aspect ratio is abnormal";
+            }
+
+            if (LooksLikeBoundaryClipping(metrics, width, height))
+            {
+                return "rendered content appears clipped by canvas boundaries";
+            }
+
+            if (LooksLikeCornerAnchoredContent(metrics, width, height))
+            {
+                return "rendered content appears corner-anchored/cropped";
+            }
+
+            return null;
+        }
+
+        private static bool LooksLikeCornerAnchoredContent(OpaqueMetrics metrics, int width, int height)
+        {
+            if (!metrics.HasVisibleContent)
+            {
+                return false;
+            }
+
+            double centerX = metrics.Bounds.Left + (metrics.Bounds.Width / 2.0d);
+            double centerY = metrics.Bounds.Top + (metrics.Bounds.Height / 2.0d);
+            double normalizedOffsetX = Math.Abs(centerX - (width / 2.0d)) / Math.Max(1.0d, width / 2.0d);
+            double normalizedOffsetY = Math.Abs(centerY - (height / 2.0d)) / Math.Max(1.0d, height / 2.0d);
+
+            return normalizedOffsetX > MaxCenterOffsetSuspicionRatio
+                || normalizedOffsetY > MaxCenterOffsetSuspicionRatio;
+        }
+
+        private static string TrySaveSvgDebugRender(Bitmap bitmap, string sourceUrl)
+        {
+            try
+            {
+                string folder = Path.Combine(Path.GetTempPath(), "FaviconExtractor", "svg-debug");
+                Directory.CreateDirectory(folder);
+
+                string safeHost = "unknown";
+                Uri uri;
+                if (!string.IsNullOrWhiteSpace(sourceUrl) && Uri.TryCreate(sourceUrl, UriKind.Absolute, out uri) && !string.IsNullOrWhiteSpace(uri.Host))
+                {
+                    safeHost = uri.Host.Replace(':', '_');
+                }
+
+                string file = safeHost + "_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff") + ".png";
+                string path = Path.Combine(folder, file);
+                bitmap.Save(path, ImageFormat.Png);
+                return path;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static OpaqueMetrics MeasureOpaqueMetrics(Bitmap bitmap)
+        {
+            Rectangle bounds = Rectangle.Empty;
+            int opaquePixels = 0;
+            bool hasVisible = false;
+            int left = bitmap.Width;
+            int top = bitmap.Height;
+            int right = -1;
+            int bottom = -1;
+
+            for (int y = 0; y < bitmap.Height; y++)
+            {
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    if (bitmap.GetPixel(x, y).A <= OpaqueAlphaThreshold)
+                    {
+                        continue;
+                    }
+
+                    hasVisible = true;
+                    opaquePixels++;
+
+                    if (x < left) left = x;
+                    if (y < top) top = y;
+                    if (x > right) right = x;
+                    if (y > bottom) bottom = y;
+                }
+            }
+
+            if (hasVisible)
+            {
+                bounds = Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
+            }
+
+            int totalPixels = Math.Max(1, bitmap.Width * bitmap.Height);
+            double opaqueRatio = (double)opaquePixels / totalPixels;
+            double contentAreaRatio = hasVisible
+                ? (double)(bounds.Width * bounds.Height) / totalPixels
+                : 0d;
+            double aspect = hasVisible
+                ? (double)Math.Max(bounds.Width, bounds.Height) / Math.Max(1, Math.Min(bounds.Width, bounds.Height))
+                : 0d;
+
+            return new OpaqueMetrics
+            {
+                HasVisibleContent = hasVisible,
+                Bounds = bounds,
+                OpaquePixelRatio = opaqueRatio,
+                ContentAreaRatio = contentAreaRatio,
+                ContentAspectRatio = aspect
+            };
+        }
+
+        private static bool LooksLikeBoundaryClipping(OpaqueMetrics metrics, int width, int height)
+        {
+            if (!metrics.HasVisibleContent)
+            {
+                return true;
+            }
+
+            int leftMargin = metrics.Bounds.Left;
+            int topMargin = metrics.Bounds.Top;
+            int rightMargin = width - metrics.Bounds.Right;
+            int bottomMargin = height - metrics.Bounds.Bottom;
+
+            bool touchesLeft = leftMargin <= 1;
+            bool touchesRight = rightMargin <= 1;
+            bool touchesTop = topMargin <= 1;
+            bool touchesBottom = bottomMargin <= 1;
+
+            if (touchesLeft && rightMargin > (int)(width * OppositeMarginSuspicionRatio)) return true;
+            if (touchesRight && leftMargin > (int)(width * OppositeMarginSuspicionRatio)) return true;
+            if (touchesTop && bottomMargin > (int)(height * OppositeMarginSuspicionRatio)) return true;
+            if (touchesBottom && topMargin > (int)(height * OppositeMarginSuspicionRatio)) return true;
+
+            return false;
+        }
+
+        private static bool ShouldTrimTransparentMargins(OpaqueMetrics metrics, int width, int height)
+        {
+            if (!metrics.HasVisibleContent)
+            {
+                return false;
+            }
+
+            int leftMargin = metrics.Bounds.Left;
+            int topMargin = metrics.Bounds.Top;
+            int rightMargin = width - metrics.Bounds.Right;
+            int bottomMargin = height - metrics.Bounds.Bottom;
+
+            bool touchesBoundary = leftMargin <= 1 || topMargin <= 1 || rightMargin <= 1 || bottomMargin <= 1;
+            if (touchesBoundary)
+            {
+                return false;
+            }
+
+            double horizontalTransparentRatio = (double)(leftMargin + rightMargin) / Math.Max(1, width);
+            double verticalTransparentRatio = (double)(topMargin + bottomMargin) / Math.Max(1, height);
+            return horizontalTransparentRatio >= ExcessMarginRatioForTrim || verticalTransparentRatio >= ExcessMarginRatioForTrim;
+        }
+
+        private static Bitmap CropToOpaqueBounds(Bitmap source, Rectangle bounds)
+        {
+            Rectangle safeBounds = Rectangle.Intersect(new Rectangle(0, 0, source.Width, source.Height), bounds);
+            if (safeBounds.Width <= 0 || safeBounds.Height <= 0)
+            {
+                return new Bitmap(source);
+            }
+
+            Bitmap cropped = new Bitmap(safeBounds.Width, safeBounds.Height, PixelFormat.Format32bppArgb);
+            using (Graphics graphics = Graphics.FromImage(cropped))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.CompositingMode = CompositingMode.SourceOver;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                graphics.DrawImage(source, new Rectangle(0, 0, safeBounds.Width, safeBounds.Height), safeBounds, GraphicsUnit.Pixel);
+            }
+
+            return cropped;
+        }
+
+        private static Bitmap CreateFittedCanvas(Bitmap source, int targetWidth, int targetHeight)
+        {
+            Bitmap canvas = new Bitmap(targetWidth, targetHeight, PixelFormat.Format32bppArgb);
+            using (Graphics graphics = Graphics.FromImage(canvas))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.CompositingMode = CompositingMode.SourceOver;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                Rectangle destination = CalculateDestinationRectangle(source.Width, source.Height, targetWidth, targetHeight, true);
+                graphics.DrawImage(source, destination);
+            }
+
+            return canvas;
+        }
+
+        private sealed class OpaqueMetrics
+        {
+            public bool HasVisibleContent { get; set; }
+            public Rectangle Bounds { get; set; }
+            public double OpaquePixelRatio { get; set; }
+            public double ContentAreaRatio { get; set; }
+            public double ContentAspectRatio { get; set; }
         }
 
         private static Bitmap DecodeIcoToBitmap(byte[] icoBytes)
@@ -109,7 +409,7 @@ namespace FaviconExtractor
                 return CloneBitmap(source);
             }
 
-            if (!isSquare)
+            if (!forceResizeToTarget && !isSquare)
             {
                 int squareSide = Math.Max(source.Width, source.Height);
                 return PadToSquareWithoutResizing(source, squareSide);

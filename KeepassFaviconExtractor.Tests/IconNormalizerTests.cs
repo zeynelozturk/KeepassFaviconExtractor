@@ -115,7 +115,7 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
-        public void NormalizeToPng_WithNonSquareSvg_PadsToSquareWithoutTargetResize()
+        public void NormalizeToPng_WithNonSquareSvg_FitsIntoTargetCanvas()
         {
             const string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='16' viewBox='0 0 32 16'><rect x='0' y='0' width='32' height='16' fill='#0000ff'/></svg>";
             byte[] svgBytes = Encoding.UTF8.GetBytes(svg);
@@ -125,10 +125,107 @@ namespace FaviconExtractor
 
             using (Bitmap bitmap = LoadBitmap(normalized))
             {
-                Assert.AreEqual(32, bitmap.Width);
-                Assert.AreEqual(32, bitmap.Height);
-                Assert.IsTrue(bitmap.GetPixel(16, 16).B > 0, "Center should contain rendered SVG pixels.");
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Width);
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(bitmap.Width / 2, bitmap.Height / 2).B > 0, "Center should contain rendered SVG pixels.");
             }
+        }
+
+        [TestMethod]
+        public void NormalizeToPng_WithLeagueAssetLikeWideSvg_ProducesReasonableIconOrFailsExplicitly()
+        {
+            const string svg = "<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 110 70' height='70' width='110'><path fill='#A38E40' d='M58.0046 10.581C69.8377 12.1048 79 22.4794 79 35.0508C79 39.6096 77.7882 43.8762 75.6862 47.5461H74.6971H69.3431C70.5796 46.0477 71.5811 44.3842 72.3354 42.5683C73.3122 40.1937 73.8068 37.654 73.8068 35.0508C73.8068 32.435 73.3122 29.908 72.3354 27.5334C71.3833 25.235 70.0355 23.1651 68.3045 21.3873C66.5734 19.6096 64.558 18.2127 62.3199 17.2477C60.9351 16.6381 59.4884 16.2191 58.0046 15.9778V10.581ZM39.6924 54.035V46.2762C38.8887 45.1207 38.2087 43.8762 37.6646 42.5683C36.6878 40.1937 36.1932 37.654 36.1932 35.0508C36.1932 32.435 36.6878 29.908 37.6646 27.5334C38.2087 26.2127 38.8887 24.9683 39.6924 23.8254V16.054C34.3756 20.5746 31 27.4064 31 35.0508C31 42.6953 34.3756 49.5143 39.6924 54.035ZM54.4189 8.33337H40.6569L43.2906 13.8572V56.2064L40.694 61.6667H71.8779L74.7218 51.2286H54.4189V8.33337Z'/></svg>";
+            byte[] svgBytes = Encoding.UTF8.GetBytes(svg);
+
+            try
+            {
+                byte[] normalized = IconNormalizer.NormalizeToPng(svgBytes, "image/svg+xml", "https://cmsassets.rgpub.io/icon.svg");
+                AssertPngSignature(normalized);
+
+                using (Bitmap bitmap = LoadBitmap(normalized))
+                {
+                    AssertLooksLikeReasonableIcon(bitmap);
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                StringAssert.Contains(ex.Message, "SVG conversion failed");
+            }
+        }
+
+        private static void AssertLooksLikeReasonableIcon(Bitmap bitmap)
+        {
+            Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Width);
+            Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Height);
+
+            Rectangle bounds;
+            int opaquePixels;
+            bool hasOpaqueContent = TryGetOpaqueBounds(bitmap, out bounds, out opaquePixels);
+            Assert.IsTrue(hasOpaqueContent, "Rendered icon should contain visible pixels.");
+
+            int total = bitmap.Width * bitmap.Height;
+            double opaqueRatio = (double)opaquePixels / Math.Max(1, total);
+            Assert.IsTrue(opaqueRatio > 0.0005d, "Rendered icon should not be near-empty.");
+
+            double areaRatio = (double)(bounds.Width * bounds.Height) / Math.Max(1, total);
+            Assert.IsTrue(areaRatio > 0.01d, "Rendered content bounds should not be extremely small.");
+
+            double centerX = bounds.Left + (bounds.Width / 2.0d);
+            double centerY = bounds.Top + (bounds.Height / 2.0d);
+            double centerOffsetX = Math.Abs(centerX - (bitmap.Width / 2.0d)) / Math.Max(1.0d, bitmap.Width / 2.0d);
+            double centerOffsetY = Math.Abs(centerY - (bitmap.Height / 2.0d)) / Math.Max(1.0d, bitmap.Height / 2.0d);
+            Assert.IsTrue(centerOffsetX <= 0.35d, "Rendered icon content is excessively offset horizontally.");
+            Assert.IsTrue(centerOffsetY <= 0.35d, "Rendered icon content is excessively offset vertically.");
+
+            int leftMargin = bounds.Left;
+            int topMargin = bounds.Top;
+            int rightMargin = bitmap.Width - bounds.Right - 1;
+            int bottomMargin = bitmap.Height - bounds.Bottom - 1;
+
+            bool touchesLeft = leftMargin <= 1;
+            bool touchesRight = rightMargin <= 1;
+            bool touchesTop = topMargin <= 1;
+            bool touchesBottom = bottomMargin <= 1;
+
+            Assert.IsFalse(touchesLeft && rightMargin > (int)(bitmap.Width * 0.20d), "Left-edge clipping suspicion detected.");
+            Assert.IsFalse(touchesRight && leftMargin > (int)(bitmap.Width * 0.20d), "Right-edge clipping suspicion detected.");
+            Assert.IsFalse(touchesTop && bottomMargin > (int)(bitmap.Height * 0.20d), "Top-edge clipping suspicion detected.");
+            Assert.IsFalse(touchesBottom && topMargin > (int)(bitmap.Height * 0.20d), "Bottom-edge clipping suspicion detected.");
+        }
+
+        private static bool TryGetOpaqueBounds(Bitmap bitmap, out Rectangle bounds, out int opaquePixels)
+        {
+            int left = bitmap.Width;
+            int top = bitmap.Height;
+            int right = -1;
+            int bottom = -1;
+            opaquePixels = 0;
+
+            for (int y = 0; y < bitmap.Height; y++)
+            {
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    if (bitmap.GetPixel(x, y).A <= 8)
+                    {
+                        continue;
+                    }
+
+                    opaquePixels++;
+                    if (x < left) left = x;
+                    if (y < top) top = y;
+                    if (x > right) right = x;
+                    if (y > bottom) bottom = y;
+                }
+            }
+
+            if (opaquePixels == 0)
+            {
+                bounds = Rectangle.Empty;
+                return false;
+            }
+
+            bounds = Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
+            return true;
         }
 
         private static void AssertPngSignature(byte[] bytes)

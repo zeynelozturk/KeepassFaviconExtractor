@@ -73,9 +73,6 @@ namespace FaviconExtractor
                 return;
             }
 
-            isExtractRunning = true;
-            extractCancellationTokenSource = new CancellationTokenSource();
-
             ExtractionStatusForm statusForm = new ExtractionStatusForm();
             statusForm.PositionNearOwner(host.MainWindow as Form);
             statusForm.AttachCancelAction(() =>
@@ -86,7 +83,40 @@ namespace FaviconExtractor
                     cts.Cancel();
                 }
             });
+            statusForm.AttachRetryAction(() =>
+            {
+                if (isExtractRunning)
+                {
+                    return;
+                }
+
+                _ = RunExtractFaviconWorkflowAsync(statusForm);
+            });
             statusForm.Show(host.MainWindow);
+
+            await RunExtractFaviconWorkflowAsync(statusForm).ConfigureAwait(true);
+        }
+
+        private async System.Threading.Tasks.Task RunExtractFaviconWorkflowAsync(ExtractionStatusForm statusForm)
+        {
+            if (statusForm == null || statusForm.IsDisposed)
+            {
+                return;
+            }
+
+            if (host == null || host.MainWindow == null)
+            {
+                return;
+            }
+
+            if (isExtractRunning)
+            {
+                return;
+            }
+
+            isExtractRunning = true;
+            extractCancellationTokenSource = new CancellationTokenSource();
+            statusForm.BeginProgress();
 
             try
             {
@@ -312,6 +342,12 @@ namespace FaviconExtractor
                     downloadStopwatch.Stop();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
 
+                    bool candidateIsSvg = IsLikelySvgCandidate(candidate, sourceBytes);
+                    if (candidateIsSvg)
+                    {
+                        ReportStatus(onStatus, "Candidate #" + (i + 1) + " identified as SVG source.");
+                    }
+
                     Stopwatch normalizeAssignStopwatch = Stopwatch.StartNew();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " normalizing/assigning...");
                     AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
@@ -406,6 +442,12 @@ namespace FaviconExtractor
                                 downloadStopwatch.Stop();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
 
+                                bool rescueCandidateIsSvg = IsLikelySvgCandidate(candidate, sourceBytes);
+                                if (rescueCandidateIsSvg)
+                                {
+                                    ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " identified as SVG source.");
+                                }
+
                                 Stopwatch normalizeAssignStopwatch = Stopwatch.StartNew();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " normalizing/assigning...");
                                 AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
@@ -427,6 +469,10 @@ namespace FaviconExtractor
                                 sb.AppendLine("Normalized PNG size: " + assignedResult.NormalizedPng.Length + " bytes");
                                 sb.AppendLine();
                                 ReportStatus(onStatus, "Assigned from rescue candidate #" + (i + 1) + ".");
+                                if (rescueCandidateIsSvg)
+                                {
+                                    ReportStatus(onStatus, "Assigned icon came from SVG conversion.");
+                                }
                                 return AssignmentAttemptResult.SuccessResult(assignedResult.NormalizedPng);
                             }
                             catch (OperationCanceledException)
@@ -515,6 +561,12 @@ namespace FaviconExtractor
                             downloadStopwatch.Stop();
                             ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
 
+                            bool rescueCandidateIsSvg = IsLikelySvgCandidate(candidate, sourceBytes);
+                            if (rescueCandidateIsSvg)
+                            {
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " identified as SVG source.");
+                            }
+
                             Stopwatch normalizeAssignStopwatch = Stopwatch.StartNew();
                             ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " normalizing/assigning...");
                             AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
@@ -535,6 +587,10 @@ namespace FaviconExtractor
                             sb.AppendLine("Normalized PNG size: " + assignedResult.NormalizedPng.Length + " bytes");
                             sb.AppendLine();
                             ReportStatus(onStatus, "Assigned from rescue candidate #" + (i + 1) + ".");
+                            if (rescueCandidateIsSvg)
+                            {
+                                ReportStatus(onStatus, "Assigned icon came from SVG conversion.");
+                            }
                             return AssignmentAttemptResult.SuccessResult(assignedResult.NormalizedPng);
                         }
                         catch (OperationCanceledException)
@@ -765,6 +821,30 @@ namespace FaviconExtractor
             return !string.IsNullOrWhiteSpace(url) && url.EndsWith(".avif", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsLikelySvgCandidate(FaviconCandidate candidate, byte[] sourceBytes)
+        {
+            if (candidate != null && !string.IsNullOrWhiteSpace(candidate.TypeAttribute) &&
+                candidate.TypeAttribute.IndexOf("svg", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            if (candidate != null && candidate.IconUri != null &&
+                candidate.IconUri.AbsoluteUri.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (sourceBytes == null || sourceBytes.Length == 0)
+            {
+                return false;
+            }
+
+            int count = Math.Min(sourceBytes.Length, 512);
+            string prefix = Encoding.UTF8.GetString(sourceBytes, 0, count);
+            return prefix.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static string FormatCandidate(FaviconCandidate candidate)
         {
             string size = candidate.BestSize.HasValue
@@ -819,9 +899,11 @@ namespace FaviconExtractor
             private readonly TextBox outputTextBox;
             private readonly RoundedPictureBox iconPreviewBox;
             private readonly Button cancelButton;
+            private readonly Button retryButton;
             private readonly Button closeButton;
             private readonly System.Windows.Forms.Timer closeCountdownTimer;
             private Action cancelAction;
+            private Action retryAction;
             private int countdownSeconds;
             private bool isInProgress;
 
@@ -880,7 +962,15 @@ namespace FaviconExtractor
                 cancelButton.Width = 100;
                 cancelButton.Click += OnCancelClick;
 
+                retryButton = new Button();
+                retryButton.Text = "Retry";
+                retryButton.Width = 100;
+                retryButton.Visible = false;
+                retryButton.Enabled = false;
+                retryButton.Click += OnRetryClick;
+
                 buttonPanel.Controls.Add(closeButton);
+                buttonPanel.Controls.Add(retryButton);
                 buttonPanel.Controls.Add(cancelButton);
 
                 closeCountdownTimer = new System.Windows.Forms.Timer();
@@ -921,6 +1011,35 @@ namespace FaviconExtractor
             public void AttachCancelAction(Action action)
             {
                 cancelAction = action;
+            }
+
+            public void AttachRetryAction(Action action)
+            {
+                retryAction = action;
+            }
+
+            public void BeginProgress()
+            {
+                if (IsDisposed)
+                {
+                    return;
+                }
+
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(BeginProgress));
+                    return;
+                }
+
+                closeCountdownTimer.Stop();
+                outputTextBox.Clear();
+                ClearPreviewImage();
+                cancelButton.Enabled = true;
+                closeButton.Text = "OK";
+                closeButton.Enabled = false;
+                retryButton.Visible = false;
+                retryButton.Enabled = false;
+                isInProgress = true;
             }
 
             public void PositionNearOwner(Form owner)
@@ -989,15 +1108,15 @@ namespace FaviconExtractor
 
             public void MarkFailed()
             {
-                SetTerminalWithoutAutoClose();
+                SetTerminalWithoutAutoClose(true);
             }
 
             public void MarkCanceled()
             {
-                SetTerminalWithoutAutoClose();
+                SetTerminalWithoutAutoClose(false);
             }
 
-            private void SetTerminalWithoutAutoClose()
+            private void SetTerminalWithoutAutoClose(bool showRetry)
             {
                 if (IsDisposed)
                 {
@@ -1006,7 +1125,7 @@ namespace FaviconExtractor
 
                 if (InvokeRequired)
                 {
-                    BeginInvoke(new Action(SetTerminalWithoutAutoClose));
+                    BeginInvoke(new Action<bool>(SetTerminalWithoutAutoClose), showRetry);
                     return;
                 }
 
@@ -1014,6 +1133,8 @@ namespace FaviconExtractor
                 cancelButton.Enabled = false;
                 closeButton.Text = "OK";
                 closeButton.Enabled = true;
+                retryButton.Visible = showRetry;
+                retryButton.Enabled = showRetry;
                 isInProgress = false;
             }
 
@@ -1022,6 +1143,16 @@ namespace FaviconExtractor
                 cancelButton.Enabled = false;
                 AppendLineSafe("Cancel requested...");
                 Action action = cancelAction;
+                if (action != null)
+                {
+                    action();
+                }
+            }
+
+            private void OnRetryClick(object sender, EventArgs e)
+            {
+                retryButton.Enabled = false;
+                Action action = retryAction;
                 if (action != null)
                 {
                     action();
@@ -1086,15 +1217,19 @@ namespace FaviconExtractor
             protected override void OnFormClosed(FormClosedEventArgs e)
             {
                 closeCountdownTimer.Stop();
+                ClearPreviewImage();
 
+                base.OnFormClosed(e);
+            }
+
+            private void ClearPreviewImage()
+            {
                 Image image = iconPreviewBox.Image;
                 if (image != null)
                 {
                     iconPreviewBox.Image = null;
                     image.Dispose();
                 }
-
-                base.OnFormClosed(e);
             }
         }
 
