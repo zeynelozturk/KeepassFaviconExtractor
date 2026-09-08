@@ -36,9 +36,9 @@ namespace FaviconExtractor
 
             AppendLine(sb, "External fallback diagnostics", onLine);
             AppendLine(sb, string.Empty, onLine);
-            AppendLine(sb, "Providers are checked with live HTTP probes. Results can vary due to network/provider state.", onLine);
-            AppendLine(sb, string.Empty, onLine);
             AppendWebpDecoderStatus(sb, onLine);
+            AppendLine(sb, string.Empty, onLine);
+            AppendLine(sb, "Providers are checked with live HTTP probes. Results can vary due to network/provider state.", onLine);
             AppendLine(sb, string.Empty, onLine);
 
             foreach (string source in ExternalFaviconServiceDiscoverer.ExternalProviderSources)
