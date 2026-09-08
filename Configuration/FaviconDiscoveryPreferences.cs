@@ -17,6 +17,8 @@ namespace FaviconExtractor
         public const int FallbackScorePenalty = 150;
         public const int ExternalServiceScorePenalty = 190;
         public const int LogoScorePenalty = 120;
+        public const int GoogleExternalScoreBonus = 20;
+        public const int FaviconImExternalScorePenalty = 20;
         public const int ExactHostScoreBonus = 25;
         public const int NormalizedIconSize = 64;
         public const bool UpscaleSmallImagesDuringNormalization = false;

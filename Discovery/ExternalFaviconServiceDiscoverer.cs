@@ -90,6 +90,15 @@ namespace FaviconExtractor
                     string rel = treatAsLogo ? "logo" : "icon";
                     int score = FaviconScorer.Score("icon", type, size);
                     score = FaviconScorer.ApplyExternalServicePenalty(score);
+                    if (string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase))
+                    {
+                        score += FaviconDiscoveryPreferences.GoogleExternalScoreBonus;
+                    }
+                    else if (string.Equals(source, "external-favicon-im", StringComparison.OrdinalIgnoreCase))
+                    {
+                        score -= FaviconDiscoveryPreferences.FaviconImExternalScorePenalty;
+                    }
+
                     if (isExactHost)
                     {
                         score += FaviconDiscoveryPreferences.ExactHostScoreBonus;
