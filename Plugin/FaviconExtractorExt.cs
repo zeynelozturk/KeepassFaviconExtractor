@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -92,6 +93,7 @@ namespace FaviconExtractor
                 PwEntry selectedEntry = host.MainWindow.GetSelectedEntry(false);
                 if (selectedEntry == null)
                 {
+                    statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Extraction failed.");
                     statusForm.AppendLineSafe("Reason: Select an entry first.");
                     statusForm.MarkFailed();
@@ -101,6 +103,7 @@ namespace FaviconExtractor
                 string url = selectedEntry.Strings.ReadSafe(PwDefs.UrlField);
                 if (string.IsNullOrWhiteSpace(url))
                 {
+                    statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Extraction failed.");
                     statusForm.AppendLineSafe("Reason: The selected entry does not have a URL.");
                     statusForm.MarkFailed();
@@ -111,13 +114,14 @@ namespace FaviconExtractor
 
                 statusForm.AppendLineSafe("Searching icon candidates...");
                 HtmlFaviconDiscoveryResult result = await FaviconDiscoveryService
-                    .DiscoverAsync(url, cancellationToken)
+                    .DiscoverAsync(url, cancellationToken, statusForm.AppendLineSafe)
                     .ConfigureAwait(true);
 
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (result == null || result.Candidates == null || result.Candidates.Count == 0)
                 {
+                    statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Extraction failed.");
                     if (result != null && !string.IsNullOrWhiteSpace(result.DiscoveryNote))
                     {
@@ -164,6 +168,7 @@ namespace FaviconExtractor
                     return;
                 }
 
+                statusForm.AppendLineSafe(string.Empty);
                 statusForm.AppendLineSafe("Extraction failed.");
                 if (!string.IsNullOrWhiteSpace(assignmentResult.FailureReason))
                 {
@@ -179,6 +184,7 @@ namespace FaviconExtractor
             }
             catch (Exception ex)
             {
+                statusForm.AppendLineSafe(string.Empty);
                 statusForm.AppendLineSafe("Extraction failed.");
                 statusForm.AppendLineSafe("Reason: " + ex.Message);
                 statusForm.MarkFailed();
@@ -293,10 +299,16 @@ namespace FaviconExtractor
                     attemptedCount++;
                     cancellationToken.ThrowIfCancellationRequested();
 
+                    Stopwatch downloadStopwatch = Stopwatch.StartNew();
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " downloading...");
                     byte[] sourceBytes = await FaviconImageDownloader
                         .DownloadAsync(candidate.IconUri, cancellationToken)
                         .ConfigureAwait(true);
+                    downloadStopwatch.Stop();
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
 
+                    Stopwatch normalizeAssignStopwatch = Stopwatch.StartNew();
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " normalizing/assigning...");
                     AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
                         database,
                         selectedEntry,
@@ -304,6 +316,8 @@ namespace FaviconExtractor
                         candidate.TypeAttribute,
                         candidate.IconUri.AbsoluteUri,
                         cancellationToken).ConfigureAwait(true);
+                    normalizeAssignStopwatch.Stop();
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " normalize/assign completed (" + normalizeAssignStopwatch.ElapsedMilliseconds + "ms).");
 
                     RefreshEntryListIcons(selectedEntry);
 
@@ -379,10 +393,16 @@ namespace FaviconExtractor
                                 attemptedCount++;
                                 cancellationToken.ThrowIfCancellationRequested();
 
+                                Stopwatch downloadStopwatch = Stopwatch.StartNew();
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " downloading...");
                                 byte[] sourceBytes = await FaviconImageDownloader
                                     .DownloadAsync(candidate.IconUri, cancellationToken)
                                     .ConfigureAwait(true);
+                                downloadStopwatch.Stop();
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
 
+                                Stopwatch normalizeAssignStopwatch = Stopwatch.StartNew();
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " normalizing/assigning...");
                                 AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
                                     database,
                                     selectedEntry,
@@ -390,6 +410,8 @@ namespace FaviconExtractor
                                     candidate.TypeAttribute,
                                     candidate.IconUri.AbsoluteUri,
                                     cancellationToken).ConfigureAwait(true);
+                                normalizeAssignStopwatch.Stop();
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " normalize/assign completed (" + normalizeAssignStopwatch.ElapsedMilliseconds + "ms).");
 
                                 RefreshEntryListIcons(selectedEntry);
 
@@ -472,10 +494,16 @@ namespace FaviconExtractor
                             attemptedCount++;
                             cancellationToken.ThrowIfCancellationRequested();
 
+                            Stopwatch downloadStopwatch = Stopwatch.StartNew();
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " downloading...");
                             byte[] sourceBytes = await FaviconImageDownloader
                                 .DownloadAsync(candidate.IconUri, cancellationToken)
                                 .ConfigureAwait(true);
+                            downloadStopwatch.Stop();
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
 
+                            Stopwatch normalizeAssignStopwatch = Stopwatch.StartNew();
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " normalizing/assigning...");
                             AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
                                 database,
                                 selectedEntry,
@@ -483,6 +511,8 @@ namespace FaviconExtractor
                                 candidate.TypeAttribute,
                                 candidate.IconUri.AbsoluteUri,
                                 cancellationToken).ConfigureAwait(true);
+                            normalizeAssignStopwatch.Stop();
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " normalize/assign completed (" + normalizeAssignStopwatch.ElapsedMilliseconds + "ms).");
 
                             RefreshEntryListIcons(selectedEntry);
 
@@ -536,7 +566,7 @@ namespace FaviconExtractor
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                byte[] normalizedPng = IconNormalizer.NormalizeToPng(sourceBytes, typeAttribute, iconUrl);
+                byte[] normalizedPng = IconNormalizer.NormalizeToPng(sourceBytes, typeAttribute, iconUrl, cancellationToken);
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -778,10 +808,11 @@ namespace FaviconExtractor
             private readonly System.Windows.Forms.Timer closeCountdownTimer;
             private Action cancelAction;
             private int countdownSeconds;
+            private bool isInProgress;
 
             public ExtractionStatusForm()
             {
-                Text = "FaviconExtractor";
+                Text = "Favicon Extractor";
                 Width = 620;
                 Height = 300;
                 StartPosition = FormStartPosition.Manual;
@@ -840,6 +871,7 @@ namespace FaviconExtractor
                 closeCountdownTimer = new System.Windows.Forms.Timer();
                 closeCountdownTimer.Interval = 1000;
                 closeCountdownTimer.Tick += OnCloseCountdownTick;
+                isInProgress = true;
 
                 Controls.Add(contentPanel);
                 Controls.Add(buttonPanel);
@@ -926,6 +958,7 @@ namespace FaviconExtractor
 
                 cancelButton.Enabled = false;
                 closeButton.Enabled = true;
+                isInProgress = false;
 
                 countdownSeconds = seconds;
                 UpdateCloseButtonCountdownText();
@@ -966,6 +999,7 @@ namespace FaviconExtractor
                 cancelButton.Enabled = false;
                 closeButton.Text = "OK";
                 closeButton.Enabled = true;
+                isInProgress = false;
             }
 
             private void OnCancelClick(object sender, EventArgs e)
@@ -1016,6 +1050,22 @@ namespace FaviconExtractor
                 }
 
                 return base.ProcessCmdKey(ref msg, keyData);
+            }
+
+            protected override void OnFormClosing(FormClosingEventArgs e)
+            {
+                if (e.CloseReason == CloseReason.UserClosing && isInProgress)
+                {
+                    if (cancelButton.Enabled)
+                    {
+                        OnCancelClick(this, EventArgs.Empty);
+                    }
+
+                    e.Cancel = true;
+                    return;
+                }
+
+                base.OnFormClosing(e);
             }
 
             protected override void OnFormClosed(FormClosedEventArgs e)

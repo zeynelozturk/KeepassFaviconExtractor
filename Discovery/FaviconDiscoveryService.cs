@@ -23,6 +23,11 @@ namespace FaviconExtractor
 
         public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl, CancellationToken cancellationToken)
         {
+            return await DiscoverAsync(inputUrl, cancellationToken, null).ConfigureAwait(false);
+        }
+
+        public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl, CancellationToken cancellationToken, Action<string> onStatus)
+        {
             Uri inputUri;
             if (!Uri.TryCreate(inputUrl, UriKind.Absolute, out inputUri) ||
                 (inputUri.Scheme != Uri.UriSchemeHttp && inputUri.Scheme != Uri.UriSchemeHttps))
@@ -30,9 +35,23 @@ namespace FaviconExtractor
                 throw new InvalidOperationException("The entry URL must be an absolute HTTP/HTTPS URL.");
             }
 
+            DiscoveryRunOutcome firstRun = await DiscoverSingleRunAsync(inputUrl, inputUri, cancellationToken).ConfigureAwait(false);
+            if (ShouldRetryFromBeginning(firstRun.Result, firstRun.TimedOut, firstRun.HadRequestTimeout))
+            {
+                AppendStatus(onStatus, "Transient timeout detected, retrying discovery (1/1)...");
+                DiscoveryRunOutcome secondRun = await DiscoverSingleRunAsync(inputUrl, inputUri, cancellationToken).ConfigureAwait(false);
+                return secondRun.Result;
+            }
+
+            return firstRun.Result;
+        }
+
+        private static async Task<DiscoveryRunOutcome> DiscoverSingleRunAsync(string inputUrl, Uri inputUri, CancellationToken cancellationToken)
+        {
             HtmlFaviconDiscoveryResult level1Result = null;
             string level1Error = null;
             bool timedOut = false;
+            bool hadRequestTimeout = false;
             string discoveryNote = null;
 
             using (CancellationTokenSource timeoutCts = new CancellationTokenSource(FaviconDiscoveryPreferences.TotalDiscoveryTimeout))
@@ -45,8 +64,16 @@ namespace FaviconExtractor
                 catch (OperationCanceledException)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    timedOut = true;
-                    level1Error = "Timed out while fetching page HTML.";
+                    if (timeoutCts.IsCancellationRequested)
+                    {
+                        timedOut = true;
+                        level1Error = "Timed out while fetching page HTML.";
+                    }
+                    else
+                    {
+                        hadRequestTimeout = true;
+                        level1Error = "Request timed out while fetching page HTML.";
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -77,7 +104,14 @@ namespace FaviconExtractor
                     catch (OperationCanceledException)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        timedOut = true;
+                        if (timeoutCts.IsCancellationRequested)
+                        {
+                            timedOut = true;
+                        }
+                        else
+                        {
+                            hadRequestTimeout = true;
+                        }
                     }
                 }
 
@@ -96,7 +130,14 @@ namespace FaviconExtractor
                     catch (OperationCanceledException)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        timedOut = true;
+                        if (timeoutCts.IsCancellationRequested)
+                        {
+                            timedOut = true;
+                        }
+                        else
+                        {
+                            hadRequestTimeout = true;
+                        }
                     }
                 }
 
@@ -120,7 +161,14 @@ namespace FaviconExtractor
                     catch (OperationCanceledException)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        timedOut = true;
+                        if (timeoutCts.IsCancellationRequested)
+                        {
+                            timedOut = true;
+                        }
+                        else
+                        {
+                            hadRequestTimeout = true;
+                        }
                     }
                 }
 
@@ -148,10 +196,12 @@ namespace FaviconExtractor
                 }
                 else if (mergedCandidates.Count == 0)
                 {
-                    discoveryNote = "No candidates from Level 1, well-known probes, external favicon services, or logo fallback.";
+                    discoveryNote = hadRequestTimeout
+                        ? "Request timed out before discovery completed."
+                        : "No candidates from Level 1, well-known probes, external favicon services, or logo fallback.";
                 }
 
-                return new HtmlFaviconDiscoveryResult
+                HtmlFaviconDiscoveryResult result = new HtmlFaviconDiscoveryResult
                 {
                     PageUri = pageUri,
                     Candidates = ranked,
@@ -160,7 +210,39 @@ namespace FaviconExtractor
                     Level1Error = level1Error,
                     DiscoveryNote = discoveryNote
                 };
+
+                return new DiscoveryRunOutcome
+                {
+                    Result = result,
+                    TimedOut = timedOut,
+                    HadRequestTimeout = hadRequestTimeout
+                };
             }
+        }
+
+        private static bool ShouldRetryFromBeginning(HtmlFaviconDiscoveryResult result, bool timedOut, bool hadRequestTimeout)
+        {
+            if (timedOut || !hadRequestTimeout)
+            {
+                return false;
+            }
+
+            return result == null || result.Candidates == null || result.Candidates.Count == 0;
+        }
+
+        private static void AppendStatus(Action<string> onStatus, string line)
+        {
+            if (onStatus != null && !string.IsNullOrWhiteSpace(line))
+            {
+                onStatus(line);
+            }
+        }
+
+        private sealed class DiscoveryRunOutcome
+        {
+            public HtmlFaviconDiscoveryResult Result { get; set; }
+            public bool TimedOut { get; set; }
+            public bool HadRequestTimeout { get; set; }
         }
 
         private static bool LooksLikeBlockedResponse(string level1Error)

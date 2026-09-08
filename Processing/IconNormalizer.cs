@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -13,27 +14,35 @@ namespace FaviconExtractor
     {
         public static byte[] NormalizeToPng(byte[] sourceBytes, string contentType, string sourceUrl)
         {
+            return NormalizeToPng(sourceBytes, contentType, sourceUrl, CancellationToken.None);
+        }
+
+        public static byte[] NormalizeToPng(byte[] sourceBytes, string contentType, string sourceUrl, CancellationToken cancellationToken)
+        {
             if (sourceBytes == null || sourceBytes.Length == 0)
             {
                 throw new ArgumentException("Source icon bytes are empty.", nameof(sourceBytes));
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             bool isSvgSource = IsSvg(contentType, sourceUrl, sourceBytes);
 
-            using (Bitmap sourceBitmap = DecodeToBitmap(sourceBytes, contentType, sourceUrl, isSvgSource))
+            using (Bitmap sourceBitmap = DecodeToBitmap(sourceBytes, contentType, sourceUrl, isSvgSource, cancellationToken))
             using (Bitmap normalizedBitmap = NormalizeBitmap(sourceBitmap, isSvgSource))
             using (MemoryStream outputStream = new MemoryStream())
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 normalizedBitmap.Save(outputStream, ImageFormat.Png);
                 return outputStream.ToArray();
             }
         }
 
-        private static Bitmap DecodeToBitmap(byte[] sourceBytes, string contentType, string sourceUrl, bool isSvgSource)
+        private static Bitmap DecodeToBitmap(byte[] sourceBytes, string contentType, string sourceUrl, bool isSvgSource, CancellationToken cancellationToken)
         {
             if (isSvgSource)
             {
-                return DecodeSvgToBitmap(sourceBytes);
+                return DecodeSvgToBitmap(sourceBytes, cancellationToken);
             }
 
             if (IsIco(contentType, sourceUrl, sourceBytes))
@@ -56,7 +65,7 @@ namespace FaviconExtractor
             }
         }
 
-        private static Bitmap DecodeSvgToBitmap(byte[] svgBytes)
+        private static Bitmap DecodeSvgToBitmap(byte[] svgBytes, CancellationToken cancellationToken)
         {
             return RunInStaThread(delegate
             {
@@ -79,7 +88,7 @@ namespace FaviconExtractor
                         return new Bitmap(image);
                     }
                 }
-            });
+            }, cancellationToken, FaviconDiscoveryPreferences.SvgStaOperationTimeout);
         }
 
         private static Bitmap DecodeIcoToBitmap(byte[] icoBytes)
@@ -232,7 +241,7 @@ namespace FaviconExtractor
             return System.Text.Encoding.UTF8.GetString(bytes, 0, count);
         }
 
-        private static T RunInStaThread<T>(Func<T> action)
+        private static T RunInStaThread<T>(Func<T> action, CancellationToken cancellationToken, TimeSpan timeout)
         {
             if (action == null)
             {
@@ -241,6 +250,7 @@ namespace FaviconExtractor
 
             if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return action();
             }
 
@@ -262,7 +272,17 @@ namespace FaviconExtractor
             thread.IsBackground = true;
             thread.SetApartmentState(ApartmentState.STA);
             thread.Start();
-            thread.Join();
+
+            Stopwatch sw = Stopwatch.StartNew();
+            while (!thread.Join(100))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (timeout > TimeSpan.Zero && sw.Elapsed >= timeout)
+                {
+                    throw new TimeoutException("STA-bound icon conversion timed out.");
+                }
+            }
 
             if (captured != null)
             {
