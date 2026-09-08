@@ -133,7 +133,15 @@ namespace FaviconExtractor
             }
             catch (Exception ex)
             {
-                AppendLine(sb, "WebP native decoder: FAIL (" + ex.GetType().Name + ": " + ex.Message + ")", onLine);
+                // If the native runtime is unavailable, provide a clearer message so users
+                // know WebP support is disabled and how to remediate.
+                string message = ex.Message;
+                if (ex is InvalidOperationException && ex.Message.Contains("WEBP native runtime is not available"))
+                {
+                    message = "WEBP native runtime is not available. Install native binaries via scripts\\bootstrap-native-webp.ps1 or ensure Visual C++ runtime (UCRT) is present.";
+                }
+
+                AppendLine(sb, "WebP native decoder: FAIL (" + ex.GetType().Name + ": " + message + ")", onLine);
                 if (ex.InnerException != null)
                 {
                     AppendLine(sb, "WebP native decoder inner: " + ex.InnerException.GetType().Name + ": " + ex.InnerException.Message, onLine);

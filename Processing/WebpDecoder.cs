@@ -12,6 +12,8 @@ namespace FaviconExtractor
     {
         private static readonly object NativeLoadSync = new object();
         private static bool nativeLoadAttempted;
+        private static bool nativeAvailable;
+        private static string nativeLoadFailureMessage;
         private static IntPtr nativeModuleHandle;
 
         public static bool LooksLikeWebp(byte[] data)
@@ -63,6 +65,22 @@ namespace FaviconExtractor
                 }
             }
 
+            string avail;
+            if (!nativeLoadAttempted)
+            {
+                avail = "unknown";
+            }
+            else
+            {
+                avail = nativeAvailable ? "true" : "false";
+            }
+
+            lines.Add("webp-native-available=" + avail);
+            if (!string.IsNullOrEmpty(nativeLoadFailureMessage))
+            {
+                lines.Add("webp-native-failure=" + nativeLoadFailureMessage);
+            }
+
             return string.Join(" | ", lines.ToArray());
         }
         public static Bitmap DecodeToBitmap(byte[] webpBytes)
@@ -72,7 +90,18 @@ namespace FaviconExtractor
                 throw new ArgumentException("WEBP source bytes are empty.", nameof(webpBytes));
             }
 
-            EnsureNativeLoaded();
+            // Ensure we've attempted to load the native runtime. If the probe has already
+            // run and determined the native runtime is unavailable, short-circuit so callers
+            // receive a quick, deterministic failure and the pipeline can fallback.
+            if (!nativeLoadAttempted)
+            {
+                EnsureNativeLoaded();
+            }
+
+            if (!nativeAvailable)
+            {
+                throw new InvalidOperationException("WEBP native runtime is not available. See diagnostics for details.");
+            }
 
             int width;
             int height;
@@ -160,6 +189,8 @@ namespace FaviconExtractor
                 }
 
                 nativeLoadAttempted = true;
+                nativeAvailable = false;
+                nativeLoadFailureMessage = null;
 
                 string architectureFolder = Environment.Is64BitProcess ? "x64" : "x86";
                 foreach (string candidatePath in EnumerateNativeLibraryPaths(architectureFolder, "libwebp.dll"))
