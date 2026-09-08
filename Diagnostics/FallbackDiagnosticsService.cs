@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
@@ -20,20 +21,30 @@ namespace FaviconExtractor
 
         public static async Task<string> RunAsync(CancellationToken cancellationToken)
         {
+            return await RunAsync(cancellationToken, null).ConfigureAwait(false);
+        }
+
+        public static async Task<string> RunAsync(CancellationToken cancellationToken, Action<string> onLine)
+        {
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine("External fallback diagnostics");
-            sb.AppendLine();
-            sb.AppendLine("Providers are checked with live HTTP probes. Results can vary due to network/provider state.");
-            sb.AppendLine();
+            List<string> failedProbes = new List<string>();
+            int totalProbes = 0;
+            int totalSuccess = 0;
+
+            AppendLine(sb, "External fallback diagnostics", onLine);
+            AppendLine(sb, string.Empty, onLine);
+            AppendLine(sb, "Providers are checked with live HTTP probes. Results can vary due to network/provider state.", onLine);
+            AppendLine(sb, string.Empty, onLine);
 
             foreach (string source in ExternalFaviconServiceDiscoverer.ExternalProviderSources)
             {
                 int successCount = 0;
 
-                sb.AppendLine(source + ":");
+                AppendLine(sb, source + ":", onLine);
                 for (int i = 0; i < ProbeDomains.Length; i++)
                 {
                     string domain = ProbeDomains[i];
+                    totalProbes++;
                     Uri uri = ExternalFaviconServiceDiscoverer.BuildProviderUri(source, domain);
                     Stopwatch sw = Stopwatch.StartNew();
 
@@ -54,14 +65,25 @@ namespace FaviconExtractor
                             if (ok)
                             {
                                 successCount++;
+                                totalSuccess++;
+                            }
+                            else
+                            {
+                                failedProbes.Add(source + " / " + domain);
                             }
 
-                            sb.AppendLine("  - " + domain
+                            AppendLine(sb, "  - " + domain
                                 + " => " + (ok ? "OK" : "FAIL")
                                 + " (status=" + (int)response.StatusCode
                                 + ", type=" + (string.IsNullOrWhiteSpace(type) ? "(none)" : type)
-                                + ", " + sw.ElapsedMilliseconds + "ms)");
+                                + ", " + sw.ElapsedMilliseconds + "ms)", onLine);
                         }
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        sw.Stop();
+                        failedProbes.Add(source + " / " + domain);
+                        AppendLine(sb, "  - " + domain + " => FAIL (timeout/canceled, " + sw.ElapsedMilliseconds + "ms)", onLine);
                     }
                     catch (OperationCanceledException)
                     {
@@ -70,15 +92,36 @@ namespace FaviconExtractor
                     catch (Exception ex)
                     {
                         sw.Stop();
-                        sb.AppendLine("  - " + domain + " => FAIL (" + ex.GetType().Name + ": " + ex.Message + ", " + sw.ElapsedMilliseconds + "ms)");
+                        failedProbes.Add(source + " / " + domain);
+                        AppendLine(sb, "  - " + domain + " => FAIL (" + ex.GetType().Name + ": " + ex.Message + ", " + sw.ElapsedMilliseconds + "ms)", onLine);
                     }
                 }
 
-                sb.AppendLine("  Summary: " + successCount + "/" + ProbeDomains.Length + " probes succeeded");
-                sb.AppendLine();
+                AppendLine(sb, "  Summary: " + successCount + "/" + ProbeDomains.Length + " probes succeeded", onLine);
+                AppendLine(sb, string.Empty, onLine);
+            }
+
+            AppendLine(sb, "Overall result: " + (failedProbes.Count == 0 ? "SUCCESS" : "FAIL"), onLine);
+            AppendLine(sb, "Overall summary: " + totalSuccess + "/" + totalProbes + " probes succeeded", onLine);
+            if (failedProbes.Count > 0)
+            {
+                AppendLine(sb, "Failed probes:", onLine);
+                for (int i = 0; i < failedProbes.Count; i++)
+                {
+                    AppendLine(sb, "  - " + failedProbes[i], onLine);
+                }
             }
 
             return sb.ToString();
+        }
+
+        private static void AppendLine(StringBuilder sb, string line, Action<string> onLine)
+        {
+            sb.AppendLine(line);
+            if (onLine != null)
+            {
+                onLine(line);
+            }
         }
 
         private static HttpClient CreateHttpClient()

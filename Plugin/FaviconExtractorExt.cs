@@ -166,28 +166,22 @@ namespace FaviconExtractor
                 return;
             }
 
-            string report;
+            DiagnosticsProgressForm diagnosticsForm = new DiagnosticsProgressForm();
+            diagnosticsForm.PositionNearOwner(host.MainWindow as Form);
+            diagnosticsForm.Show(host.MainWindow);
+
             try
             {
-                report = await FallbackDiagnosticsService.RunAsync(CancellationToken.None).ConfigureAwait(true);
+                await FallbackDiagnosticsService
+                    .RunAsync(CancellationToken.None, diagnosticsForm.AppendLineSafe)
+                    .ConfigureAwait(true);
+
+                diagnosticsForm.MarkCompleted();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    host.MainWindow,
-                    "Diagnostics failed: " + ex.Message,
-                    "FaviconExtractor",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
+                diagnosticsForm.MarkFailed(ex.Message);
             }
-
-            MessageBox.Show(
-                host.MainWindow,
-                report,
-                "FaviconExtractor Diagnostics",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
         }
 
         private async System.Threading.Tasks.Task TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, Uri pageUri, StringBuilder sb)
@@ -610,6 +604,100 @@ namespace FaviconExtractor
                 + ", type='" + mimeType + "'"
                 + ", size=" + size
                 + ", url=" + candidate.IconUri;
+        }
+
+        private sealed class DiagnosticsProgressForm : Form
+        {
+            private readonly TextBox outputTextBox;
+            private readonly Button closeButton;
+
+            public DiagnosticsProgressForm()
+            {
+                Text = "FaviconExtractor Diagnostics";
+                Width = 760;
+                Height = 480;
+                StartPosition = FormStartPosition.Manual;
+
+                outputTextBox = new TextBox();
+                outputTextBox.Multiline = true;
+                outputTextBox.ReadOnly = true;
+                outputTextBox.ScrollBars = ScrollBars.Vertical;
+                outputTextBox.WordWrap = false;
+                outputTextBox.Dock = DockStyle.Fill;
+
+                closeButton = new Button();
+                closeButton.Text = "Close";
+                closeButton.Dock = DockStyle.Bottom;
+                closeButton.Height = 34;
+                closeButton.Enabled = false;
+                closeButton.Click += (_, __) => Close();
+
+                Controls.Add(outputTextBox);
+                Controls.Add(closeButton);
+            }
+
+            public void PositionNearOwner(Form owner)
+            {
+                if (owner == null)
+                {
+                    StartPosition = FormStartPosition.CenterScreen;
+                    return;
+                }
+
+                int x = owner.Left + ((owner.Width - Width) / 2);
+                int y = owner.Top + ((owner.Height - Height) / 2);
+
+                if (x < 0) x = 0;
+                if (y < 0) y = 0;
+
+                Location = new System.Drawing.Point(x, y);
+            }
+
+            public void AppendLineSafe(string line)
+            {
+                if (IsDisposed)
+                {
+                    return;
+                }
+
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action<string>(AppendLineSafe), line);
+                    return;
+                }
+
+                outputTextBox.AppendText(line + Environment.NewLine);
+            }
+
+            public void MarkCompleted()
+            {
+                AppendLineSafe(string.Empty);
+                AppendLineSafe("Diagnostics completed.");
+                EnableClosing();
+            }
+
+            public void MarkFailed(string message)
+            {
+                AppendLineSafe(string.Empty);
+                AppendLineSafe("Diagnostics failed: " + message);
+                EnableClosing();
+            }
+
+            private void EnableClosing()
+            {
+                if (IsDisposed)
+                {
+                    return;
+                }
+
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(EnableClosing));
+                    return;
+                }
+
+                closeButton.Enabled = true;
+            }
         }
     }
 }
