@@ -147,6 +147,7 @@ namespace FaviconExtractor
                             selectedEntry,
                             result.Candidates,
                             result.PageUri,
+                            cancellationToken,
                             assignmentCts.Token,
                             new StringBuilder(),
                             statusForm.AppendLineSafe).ConfigureAwait(true);
@@ -162,6 +163,10 @@ namespace FaviconExtractor
                 if (assignmentResult.Success)
                 {
                     statusForm.SetAssignedIconPreview(assignmentResult.AssignedIconPngBytes);
+                    if (!string.IsNullOrWhiteSpace(assignmentResult.WarningMessage))
+                    {
+                        statusForm.AppendLineSafe("Warning: " + assignmentResult.WarningMessage);
+                    }
                     statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Success: icon assigned.");
                     statusForm.MarkCompletedWithCountdown(2);
@@ -231,7 +236,7 @@ namespace FaviconExtractor
             }
         }
 
-        private async System.Threading.Tasks.Task<AssignmentAttemptResult> TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, Uri pageUri, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
+        private async System.Threading.Tasks.Task<AssignmentAttemptResult> TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, Uri pageUri, CancellationToken userCancellationToken, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
         {
             PwDatabase database = host.Database;
             if (database == null || !database.IsOpen)
@@ -426,6 +431,14 @@ namespace FaviconExtractor
                             }
                             catch (OperationCanceledException)
                             {
+                                if (!userCancellationToken.IsCancellationRequested && assignedNormalizedPngBytes != null)
+                                {
+                                    ReportStatus(onStatus, "Rescue canceled/timed out. Keeping assigned icon.");
+                                    return AssignmentAttemptResult.SuccessResult(
+                                        assignedNormalizedPngBytes,
+                                        "Rescue attempt timed out or was canceled; kept initially assigned icon.");
+                                }
+
                                 throw;
                             }
                             catch (Exception ex)
@@ -775,17 +788,19 @@ namespace FaviconExtractor
             public bool Success { get; private set; }
             public string FailureReason { get; private set; }
             public byte[] AssignedIconPngBytes { get; private set; }
+            public string WarningMessage { get; private set; }
 
             private AssignmentAttemptResult()
             {
             }
 
-            public static AssignmentAttemptResult SuccessResult(byte[] assignedIconPngBytes)
+            public static AssignmentAttemptResult SuccessResult(byte[] assignedIconPngBytes, string warningMessage = null)
             {
                 return new AssignmentAttemptResult
                 {
                     Success = true,
-                    AssignedIconPngBytes = assignedIconPngBytes
+                    AssignedIconPngBytes = assignedIconPngBytes,
+                    WarningMessage = warningMessage
                 };
             }
 
