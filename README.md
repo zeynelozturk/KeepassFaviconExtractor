@@ -1,4 +1,4 @@
-# KeePassFaviconExtractor
+# KeePass Favicon Extractor
 
 A KeePass 2 plugin that attempts to find, download, convert, and cache
 website favicons using multiple discovery methods.
