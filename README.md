@@ -46,6 +46,8 @@ WEBP decoding uses native `libwebp.dll` files. Place them locally at:
 
 - `native\x86\libwebp.dll`
 - `native\x64\libwebp.dll`
+- `native\x86\libsharpyuv.dll`
+- `native\x64\libsharpyuv.dll`
 
 The project is configured to copy these DLLs to the output directory.
 These binaries are intentionally ignored by Git in this repository.

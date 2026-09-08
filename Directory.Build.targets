@@ -4,8 +4,12 @@
 		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor' and '$(SkipNativeWebpCheck)' != 'true' and '$(DesignTimeBuild)' != 'true'">
 	<Error Condition="!Exists('$(MSBuildProjectDirectory)\native\x86\libwebp.dll')"
 		   Text="Missing native dependency: 'native\x86\libwebp.dll'. Run '.\scripts\bootstrap-native-webp.ps1' or build with /p:SkipNativeWebpCheck=true." />
+	<Error Condition="!Exists('$(MSBuildProjectDirectory)\native\x86\libsharpyuv.dll')"
+		   Text="Missing native dependency: 'native\x86\libsharpyuv.dll'. Run '.\scripts\bootstrap-native-webp.ps1' or build with /p:SkipNativeWebpCheck=true." />
 	<Error Condition="!Exists('$(MSBuildProjectDirectory)\native\x64\libwebp.dll')"
 		   Text="Missing native dependency: 'native\x64\libwebp.dll'. Run '.\scripts\bootstrap-native-webp.ps1' or build with /p:SkipNativeWebpCheck=true." />
+	<Error Condition="!Exists('$(MSBuildProjectDirectory)\native\x64\libsharpyuv.dll')"
+		   Text="Missing native dependency: 'native\x64\libsharpyuv.dll'. Run '.\scripts\bootstrap-native-webp.ps1' or build with /p:SkipNativeWebpCheck=true." />
   </Target>
 
   <Target Name="RunTestsOnBuild"

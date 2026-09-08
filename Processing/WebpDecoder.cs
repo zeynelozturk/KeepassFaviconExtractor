@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -30,6 +31,40 @@ namespace FaviconExtractor
                 && data[11] == (byte)'P';
         }
 
+        internal static string GetRuntimeDiagnosticInfo()
+        {
+            string architectureFolder = Environment.Is64BitProcess ? "x64" : "x86";
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
+            string assemblyDirectory = Path.GetDirectoryName(typeof(WebpDecoder).Assembly.Location) ?? string.Empty;
+
+            List<string> lines = new List<string>();
+            lines.Add("process-bitness=" + (Environment.Is64BitProcess ? "x64" : "x86"));
+            lines.Add("app-base=" + baseDirectory);
+            lines.Add("assembly-dir=" + assemblyDirectory);
+
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string candidatePath in EnumerateNativeLibraryPaths(architectureFolder, "libwebp.dll"))
+            {
+                if (!seen.Add(candidatePath))
+                {
+                    continue;
+                }
+
+                lines.Add((File.Exists(candidatePath) ? "FOUND " : "MISS  ") + candidatePath);
+
+                string candidateDir = Path.GetDirectoryName(candidatePath);
+                if (!string.IsNullOrWhiteSpace(candidateDir))
+                {
+                    string sharpYuvPath = Path.Combine(candidateDir, "libsharpyuv.dll");
+                    if (seen.Add(sharpYuvPath))
+                    {
+                        lines.Add((File.Exists(sharpYuvPath) ? "FOUND " : "MISS  ") + sharpYuvPath);
+                    }
+                }
+            }
+
+            return string.Join(" | ", lines.ToArray());
+        }
         public static Bitmap DecodeToBitmap(byte[] webpBytes)
         {
             if (webpBytes == null || webpBytes.Length == 0)
@@ -127,11 +162,21 @@ namespace FaviconExtractor
                 nativeLoadAttempted = true;
 
                 string architectureFolder = Environment.Is64BitProcess ? "x64" : "x86";
-                foreach (string candidatePath in EnumerateNativeLibraryPaths(architectureFolder))
+                foreach (string candidatePath in EnumerateNativeLibraryPaths(architectureFolder, "libwebp.dll"))
                 {
                     if (!File.Exists(candidatePath))
                     {
                         continue;
+                    }
+
+                    string candidateDirectory = Path.GetDirectoryName(candidatePath);
+                    if (!string.IsNullOrWhiteSpace(candidateDirectory))
+                    {
+                        string sharpYuvPath = Path.Combine(candidateDirectory, "libsharpyuv.dll");
+                        if (File.Exists(sharpYuvPath))
+                        {
+                            LoadLibrary(sharpYuvPath);
+                        }
                     }
 
                     IntPtr handle = LoadLibrary(candidatePath);
@@ -144,9 +189,8 @@ namespace FaviconExtractor
             }
         }
 
-        private static System.Collections.Generic.IEnumerable<string> EnumerateNativeLibraryPaths(string architectureFolder)
+        private static System.Collections.Generic.IEnumerable<string> EnumerateNativeLibraryPaths(string architectureFolder, string fileName)
         {
-            string fileName = "libwebp.dll";
             string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
             string assemblyDirectory = Path.GetDirectoryName(typeof(WebpDecoder).Assembly.Location) ?? string.Empty;
 

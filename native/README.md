@@ -7,7 +7,7 @@ The project provides prebuilt native libwebp binaries for Windows and other plat
 
 The binaries are built from the official [WebP/libwebp](https://github.com/webmproject/libwebp) project.
 
-If `native\\x86\\libwebp.dll` and `native\\x64\\libwebp.dll` are missing, run:
+If `native\\x86\\libwebp.dll`, `native\\x64\\libwebp.dll`, `native\\x86\\libsharpyuv.dll`, or `native\\x64\\libsharpyuv.dll` are missing, run:
 
 ```powershell
 .\\scripts\\bootstrap-native-webp.ps1

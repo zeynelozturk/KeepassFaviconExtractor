@@ -22,17 +22,18 @@ function Download-Package {
 	Invoke-WebRequest -Uri $url -OutFile $OutFile -UseBasicParsing -UserAgent 'curl/8.0'
 }
 
-function Extract-LibwebpDll {
+function Extract-NativeDll {
 	param(
 		[string]$PackagePath,
 		[string]$RuntimeFolder,
+		[string]$DllName,
 		[string]$TargetPath
 	)
 
 	Add-Type -AssemblyName System.IO.Compression.FileSystem
 	$zip = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
 	try {
-		$entryPath = "runtimes/$RuntimeFolder/native/libwebp.dll"
+		$entryPath = "runtimes/$RuntimeFolder/native/$DllName"
 		$entry = $zip.Entries | Where-Object { $_.FullName -eq $entryPath } | Select-Object -First 1
 		if (-not $entry) {
 			throw "Entry '$entryPath' not found in package '$PackagePath'."
@@ -73,9 +74,11 @@ function Extract-LibwebpDll {
 $destination = [IO.Path]::GetFullPath($DestinationRoot)
 $x86Target = Join-Path $destination 'x86\libwebp.dll'
 $x64Target = Join-Path $destination 'x64\libwebp.dll'
+$x86SharpYuvTarget = Join-Path $destination 'x86\libsharpyuv.dll'
+$x64SharpYuvTarget = Join-Path $destination 'x64\libsharpyuv.dll'
 
-if ((Test-Path $x86Target) -and (Test-Path $x64Target) -and -not $Force) {
-	Write-Host "Native libwebp DLLs are already present under '$destination'."
+if ((Test-Path $x86Target) -and (Test-Path $x64Target) -and (Test-Path $x86SharpYuvTarget) -and (Test-Path $x64SharpYuvTarget) -and -not $Force) {
+	Write-Host "Native WebP DLLs are already present under '$destination'."
 	return
 }
 
@@ -89,10 +92,12 @@ try {
 	Download-Package -PackageId 'Imazen.WebP.NativeRuntime.win-x86' -Version $Version -OutFile $x86Pkg
 	Download-Package -PackageId 'Imazen.WebP.NativeRuntime.win-x64' -Version $Version -OutFile $x64Pkg
 
-	Extract-LibwebpDll -PackagePath $x86Pkg -RuntimeFolder 'win-x86' -TargetPath $x86Target
-	Extract-LibwebpDll -PackagePath $x64Pkg -RuntimeFolder 'win-x64' -TargetPath $x64Target
+	Extract-NativeDll -PackagePath $x86Pkg -RuntimeFolder 'win-x86' -DllName 'libwebp.dll' -TargetPath $x86Target
+	Extract-NativeDll -PackagePath $x64Pkg -RuntimeFolder 'win-x64' -DllName 'libwebp.dll' -TargetPath $x64Target
+	Extract-NativeDll -PackagePath $x86Pkg -RuntimeFolder 'win-x86' -DllName 'libsharpyuv.dll' -TargetPath $x86SharpYuvTarget
+	Extract-NativeDll -PackagePath $x64Pkg -RuntimeFolder 'win-x64' -DllName 'libsharpyuv.dll' -TargetPath $x64SharpYuvTarget
 
-	Write-Host "Native libwebp bootstrap completed."
+	Write-Host "Native WebP bootstrap completed."
 }
 finally {
 	if (Test-Path $tmpRoot) {

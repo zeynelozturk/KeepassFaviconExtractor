@@ -121,6 +121,7 @@ namespace FaviconExtractor
 
         private static void AppendWebpDecoderStatus(StringBuilder sb, Action<string> onLine)
         {
+            AppendLine(sb, "WebP loader paths: " + WebpDecoder.GetRuntimeDiagnosticInfo(), onLine);
             try
             {
                 byte[] webpSample = Convert.FromBase64String(WebpDiagnosticSampleBase64);
@@ -132,7 +133,11 @@ namespace FaviconExtractor
             }
             catch (Exception ex)
             {
-                AppendLine(sb, "WebP native decoder: FAIL (" + ex.GetType().Name + ")", onLine);
+                AppendLine(sb, "WebP native decoder: FAIL (" + ex.GetType().Name + ": " + ex.Message + ")", onLine);
+                if (ex.InnerException != null)
+                {
+                    AppendLine(sb, "WebP native decoder inner: " + ex.InnerException.GetType().Name + ": " + ex.InnerException.Message, onLine);
+                }
             }
         }
 

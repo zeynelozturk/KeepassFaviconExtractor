@@ -86,6 +86,7 @@ foreach ($file in $runtimeFiles) {
 
 $nativeSourceDir = Join-Path $buildOutput 'native'
 if (Test-Path $nativeSourceDir) {
+	# Copy the full native folder to keep all native dependencies (e.g., libsharpyuv + libwebp).
 	Copy-Item $nativeSourceDir (Join-Path $dllOutDir 'native') -Recurse -Force
 }
 
