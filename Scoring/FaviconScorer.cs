@@ -93,6 +93,22 @@ namespace FaviconExtractor
             }
 
             int maxSide = Math.Max(bestSize.Value.Width, bestSize.Value.Height);
+            int target = FaviconDiscoveryPreferences.NormalizedIconSize;
+
+            // Prefer candidates that are closest to the normalized target size,
+            // with an explicit bonus for exact target-size icons (e.g., 128x128),
+            // so we avoid downloading unnecessarily large files when equivalent
+            // icon quality is already available.
+            if (maxSide == target)
+            {
+                return 1000;
+            }
+
+            if (maxSide > target)
+            {
+                int oversizePenalty = Math.Min(maxSide - target, 400);
+                return 900 - oversizePenalty;
+            }
 
             int[] preferred = FaviconDiscoveryPreferences.PreferredIconSizes;
             for (int i = 0; i < preferred.Length; ++i)

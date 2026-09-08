@@ -416,19 +416,31 @@ namespace FaviconExtractor
 
         private static Bitmap NormalizeBitmap(Bitmap source, bool forceResizeToTarget)
         {
+            int targetSize = FaviconDiscoveryPreferences.NormalizedIconSize;
             bool isSquare = source.Width > 0 && source.Height > 0 && source.Width == source.Height;
+
             if (!forceResizeToTarget && isSquare)
             {
+                if (source.Width > targetSize)
+                {
+                    return ResizeToTargetCanvas(source, targetSize, allowUpscale: false);
+                }
+
                 return CloneBitmap(source);
             }
 
             if (!forceResizeToTarget && !isSquare)
             {
                 int squareSide = Math.Max(source.Width, source.Height);
+
+                if (squareSide > targetSize)
+                {
+                    return ResizeToTargetCanvas(source, targetSize, allowUpscale: false);
+                }
+
                 return PadToSquareWithoutResizing(source, squareSide);
             }
 
-            int targetSize = FaviconDiscoveryPreferences.NormalizedIconSize;
             Bitmap canvas = new Bitmap(targetSize, targetSize, PixelFormat.Format32bppArgb);
 
             using (Graphics graphics = Graphics.FromImage(canvas))
@@ -441,6 +453,25 @@ namespace FaviconExtractor
                 graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
                 Rectangle destination = CalculateDestinationRectangle(source.Width, source.Height, targetSize, targetSize, forceResizeToTarget);
+                graphics.DrawImage(source, destination);
+            }
+
+            return canvas;
+        }
+
+        private static Bitmap ResizeToTargetCanvas(Bitmap source, int targetSize, bool allowUpscale)
+        {
+            Bitmap canvas = new Bitmap(targetSize, targetSize, PixelFormat.Format32bppArgb);
+            using (Graphics graphics = Graphics.FromImage(canvas))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.CompositingMode = CompositingMode.SourceOver;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                Rectangle destination = CalculateDestinationRectangle(source.Width, source.Height, targetSize, targetSize, allowUpscale);
                 graphics.DrawImage(source, destination);
             }
 

@@ -29,6 +29,38 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void NormalizeToPng_WithSquareLargePng_DownscalesToTargetCanvas()
+        {
+            byte[] pngBytes = CreatePngBytes(256, 256, Color.DarkCyan);
+
+            byte[] normalized = IconNormalizer.NormalizeToPng(pngBytes, "image/png", "https://example.test/icon-256.png");
+            AssertPngSignature(normalized);
+
+            using (Bitmap bitmap = LoadBitmap(normalized))
+            {
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Width);
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(bitmap.Width / 2, bitmap.Height / 2).A > 0, "Downscaled icon should retain visible pixels.");
+            }
+        }
+
+        [TestMethod]
+        public void NormalizeToPng_WithNonSquareLargePng_DownscalesAndFitsToTargetCanvas()
+        {
+            byte[] pngBytes = CreatePngBytes(256, 192, Color.MediumPurple);
+
+            byte[] normalized = IconNormalizer.NormalizeToPng(pngBytes, "image/png", "https://example.test/icon-large-rect.png");
+            AssertPngSignature(normalized);
+
+            using (Bitmap bitmap = LoadBitmap(normalized))
+            {
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Width);
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(bitmap.Width / 2, bitmap.Height / 2).A > 0, "Centered area should contain downscaled icon pixels.");
+            }
+        }
+
+        [TestMethod]
         public void NormalizeToPng_WithSquareSvg_ResizesToTargetCanvas()
         {
             const string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='#00aa00'/></svg>";
@@ -513,6 +545,15 @@ namespace FaviconExtractor
             Assert.IsTrue(googleV2 > favicone);
             Assert.IsTrue(favicone > vemetric);
             Assert.IsTrue(vemetric > faviconIm);
+        }
+
+        [TestMethod]
+        public void ScoreSize_PrefersExact128OverLargerIcon()
+        {
+            int score128 = FaviconScorer.Score("icon", "image/png", new Size(128, 128));
+            int score192 = FaviconScorer.Score("icon", "image/png", new Size(192, 192));
+
+            Assert.IsTrue(score128 > score192, "128x128 icon should be preferred over larger icons.");
         }
     }
 }
