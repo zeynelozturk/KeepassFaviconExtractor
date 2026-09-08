@@ -16,7 +16,7 @@ namespace FaviconExtractor
         public const int MaxAutomaticRedirects = 6;
         public const int MaxFallbackRequestsPerLookup = 6;
         public const int MaxFallbackRequestsWhenBlocked = 3;
-        public const int MaxAssignmentAttempts = 5;
+        public const int MaxAssignmentAttempts = 8;
         public const int MaxIconDownloadBytes = 1024 * 1024;
         public const int FallbackScorePenalty = 150;
         public const int ExternalServiceScorePenalty = 190;

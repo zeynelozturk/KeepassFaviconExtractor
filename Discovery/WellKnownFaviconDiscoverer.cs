@@ -60,7 +60,7 @@ namespace FaviconExtractor
             HttpClient client = new HttpClient(handler);
             client.Timeout = FaviconDiscoveryPreferences.FallbackProbeTimeout;
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-            client.DefaultRequestHeaders.Accept.ParseAdd("image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
+            client.DefaultRequestHeaders.Accept.ParseAdd("image/png,image/x-icon,image/svg+xml,image/apng,image/*,*/*;q=0.8");
             return client;
         }
 

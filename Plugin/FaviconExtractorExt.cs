@@ -330,6 +330,10 @@ namespace FaviconExtractor
 
                 try
                 {
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " info: source="
+                        + (string.IsNullOrWhiteSpace(candidate.Source) ? "unknown" : candidate.Source)
+                        + ", type=" + (string.IsNullOrWhiteSpace(candidate.TypeAttribute) ? "(none)" : candidate.TypeAttribute)
+                        + ", url=" + candidate.IconUri.AbsoluteUri);
                     ReportStatus(onStatus, "Trying candidate #" + (i + 1) + "...");
                     attemptedCount++;
                     cancellationToken.ThrowIfCancellationRequested();
@@ -378,8 +382,7 @@ namespace FaviconExtractor
                 {
                     lastError = ex;
                     highestFailedScoreBeforeAssignment = Math.Max(highestFailedScoreBeforeAssignment, candidate.Score);
-                    sb.AppendLine("Candidate #" + (i + 1) + " failed: " + ex.Message);
-                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " failed.");
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " failed: " + ex.GetType().Name + " - " + ex.Message);
                 }
             }
 
@@ -430,6 +433,10 @@ namespace FaviconExtractor
 
                             try
                             {
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " info: source="
+                                    + (string.IsNullOrWhiteSpace(candidate.Source) ? "unknown" : candidate.Source)
+                                    + ", type=" + (string.IsNullOrWhiteSpace(candidate.TypeAttribute) ? "(none)" : candidate.TypeAttribute)
+                                    + ", url=" + candidate.IconUri.AbsoluteUri);
                                 ReportStatus(onStatus, "Trying rescue candidate #" + (i + 1) + "...");
                                 attemptedCount++;
                                 cancellationToken.ThrowIfCancellationRequested();
@@ -490,8 +497,7 @@ namespace FaviconExtractor
                             catch (Exception ex)
                             {
                                 lastError = ex;
-                                sb.AppendLine("Rescue candidate #" + (i + 1) + " failed: " + ex.Message);
-                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " failed.");
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " failed: " + ex.GetType().Name + " - " + ex.Message);
                             }
                         }
                     }
@@ -549,6 +555,10 @@ namespace FaviconExtractor
 
                         try
                         {
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " info: source="
+                                + (string.IsNullOrWhiteSpace(candidate.Source) ? "unknown" : candidate.Source)
+                                + ", type=" + (string.IsNullOrWhiteSpace(candidate.TypeAttribute) ? "(none)" : candidate.TypeAttribute)
+                                + ", url=" + candidate.IconUri.AbsoluteUri);
                             ReportStatus(onStatus, "Trying rescue candidate #" + (i + 1) + "...");
                             attemptedCount++;
                             cancellationToken.ThrowIfCancellationRequested();
@@ -600,8 +610,7 @@ namespace FaviconExtractor
                         catch (Exception ex)
                         {
                             lastError = ex;
-                            sb.AppendLine("Rescue candidate #" + (i + 1) + " failed: " + ex.Message);
-                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " failed.");
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " failed: " + ex.GetType().Name + " - " + ex.Message);
                         }
                     }
                 }
@@ -635,11 +644,27 @@ namespace FaviconExtractor
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                byte[] normalizedPng = IconNormalizer.NormalizeToPng(sourceBytes, typeAttribute, iconUrl, cancellationToken);
+                byte[] normalizedPng;
+                try
+                {
+                    normalizedPng = IconNormalizer.NormalizeToPng(sourceBytes, typeAttribute, iconUrl, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("Normalize failed: " + ex.Message, ex);
+                }
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                PwUuid assignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(database, selectedEntry, normalizedPng);
+                PwUuid assignedUuid;
+                try
+                {
+                    assignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(database, selectedEntry, normalizedPng);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("Assign failed: " + ex.Message, ex);
+                }
 
                 return new AssignmentExecutionResult
                 {
