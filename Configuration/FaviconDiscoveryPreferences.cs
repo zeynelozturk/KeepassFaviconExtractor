@@ -12,7 +12,10 @@ namespace FaviconExtractor
         public static readonly TimeSpan IconDownloadTimeout = TimeSpan.FromSeconds(8);
         public static readonly TimeSpan AssignmentTimeout = TimeSpan.FromSeconds(12);
         public static readonly TimeSpan SvgStaOperationTimeout = TimeSpan.FromSeconds(6);
-        public const bool EnableSvgDebugRenderDump = false;
+        // Use static readonly so the debug-dump branch remains in compiled code
+        // and can be toggled at runtime or turned on by modifying this value
+        // without creating unreachable-code warnings at compile time.
+        public static readonly bool EnableSvgDebugRenderDump = false;
         public const int MaxAutomaticRedirects = 6;
         public const int MaxFallbackRequestsPerLookup = 6;
         public const int MaxFallbackRequestsWhenBlocked = 3;

@@ -16,8 +16,6 @@ Padded source images can still look visually small even when technically “good
 If refining further, the best next improvement is: pre-validate top N candidates (download+decode lightweight) before final ranking/assignment. That removes most weirdness at once without breaking fallback behavior.
 
 Next:
-- Add webp and maybe avif support.
-- Do we need .pdb files inside zip files?
 - Optional automatic finding of favicon upon adding new entry.
 - If there is no URL, the plugin can just offer a logo it found depending on the entry's title or other metadata.
 - After finished, add an Options dialog and add a "Show fetch details" checkbox to the Options dialog.

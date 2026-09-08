@@ -46,6 +46,7 @@ $buildOutput = Join-Path $repoRoot ("bin\$Configuration")
 $dllOutDir = Join-Path $outputBase 'dll\FaviconExtractor'
 $plgxOutDir = Join-Path $outputBase 'plgx'
 $zipOutDir = Join-Path $outputBase 'zip'
+$symbolsOutDir = Join-Path $outputBase 'symbols'
 
 if (-not (Test-Path $projectFile)) {
 	throw "Project file not found: $projectFile"
@@ -68,20 +69,27 @@ if (Test-Path $outputBase) {
 }
 
 New-Item -ItemType Directory -Path $dllOutDir -Force | Out-Null
+New-Item -ItemType Directory -Path $symbolsOutDir -Force | Out-Null
 New-Item -ItemType Directory -Path $plgxOutDir -Force | Out-Null
 New-Item -ItemType Directory -Path $zipOutDir -Force | Out-Null
 
-$runtimeFiles = Get-ChildItem $buildOutput -File | Where-Object {
-	($_.Extension -in '.dll', '.pdb') -and
+$runtimeDlls = Get-ChildItem $buildOutput -File | Where-Object {
+	$_.Extension -ieq '.dll' -and
 	($_.Name -ne 'KeePass.exe')
 }
 
-if ($runtimeFiles.Count -eq 0) {
-	throw "No runtime files found in $buildOutput"
+$runtimePdbs = Get-ChildItem $buildOutput -File | Where-Object { $_.Extension -ieq '.pdb' }
+
+if ($runtimeDlls.Count -eq 0) {
+	throw "No runtime DLLs found in $buildOutput"
 }
 
-foreach ($file in $runtimeFiles) {
+foreach ($file in $runtimeDlls) {
 	Copy-Item $file.FullName (Join-Path $dllOutDir $file.Name)
+}
+
+foreach ($pdb in $runtimePdbs) {
+	Copy-Item $pdb.FullName (Join-Path $symbolsOutDir $pdb.Name)
 }
 
 $nativeSourceDir = Join-Path $buildOutput 'native'

@@ -176,7 +176,7 @@ namespace FaviconExtractor
 
         private static void EnsureNativeLoaded()
         {
-            if (nativeModuleHandle != IntPtr.Zero || nativeLoadAttempted)
+            if (nativeModuleHandle != IntPtr.Zero)
             {
                 return;
             }
@@ -188,11 +188,26 @@ namespace FaviconExtractor
                     return;
                 }
 
+                string architectureFolder = Environment.Is64BitProcess ? "x64" : "x86";
+
+                // If we've already tried to load before but no candidate files existed at that time,
+                // allow re-attempt when candidate files now exist on disk. This prevents a permanent
+                // disabled state when files are added after the first probe (for example via bootstrap).
+                bool anyCandidateExists = false;
+                foreach (string p in EnumerateNativeLibraryPaths(architectureFolder, "libwebp.dll"))
+                {
+                    if (File.Exists(p)) { anyCandidateExists = true; break; }
+                }
+
+                if (nativeLoadAttempted && !anyCandidateExists)
+                {
+                    // We've attempted before and still no candidate files — skip re-attempt.
+                    return;
+                }
+
                 nativeLoadAttempted = true;
                 nativeAvailable = false;
                 nativeLoadFailureMessage = null;
-
-                string architectureFolder = Environment.Is64BitProcess ? "x64" : "x86";
                 foreach (string candidatePath in EnumerateNativeLibraryPaths(architectureFolder, "libwebp.dll"))
                 {
                     if (!File.Exists(candidatePath))
