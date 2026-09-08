@@ -20,7 +20,7 @@ namespace FaviconExtractor
         public const int GoogleExternalScoreBonus = 20;
         public const int FaviconImExternalScorePenalty = 20;
         public const int ExactHostScoreBonus = 25;
-        public const int NormalizedIconSize = 64;
+        public const int NormalizedIconSize = 128;
         public const bool UpscaleSmallImagesDuringNormalization = false;
         public const int TinySourceUpscaleThreshold = 24;
 

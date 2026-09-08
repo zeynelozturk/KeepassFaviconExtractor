@@ -18,8 +18,10 @@ namespace FaviconExtractor
                 throw new ArgumentException("Source icon bytes are empty.", nameof(sourceBytes));
             }
 
-            using (Bitmap sourceBitmap = DecodeToBitmap(sourceBytes, contentType, sourceUrl))
-            using (Bitmap normalizedBitmap = NormalizeBitmap(sourceBitmap))
+            bool isSvgSource = IsSvg(contentType, sourceUrl, sourceBytes);
+
+            using (Bitmap sourceBitmap = DecodeToBitmap(sourceBytes, contentType, sourceUrl, isSvgSource))
+            using (Bitmap normalizedBitmap = NormalizeBitmap(sourceBitmap, isSvgSource))
             using (MemoryStream outputStream = new MemoryStream())
             {
                 normalizedBitmap.Save(outputStream, ImageFormat.Png);
@@ -27,9 +29,9 @@ namespace FaviconExtractor
             }
         }
 
-        private static Bitmap DecodeToBitmap(byte[] sourceBytes, string contentType, string sourceUrl)
+        private static Bitmap DecodeToBitmap(byte[] sourceBytes, string contentType, string sourceUrl, bool isSvgSource)
         {
-            if (IsSvg(contentType, sourceUrl, sourceBytes))
+            if (isSvgSource)
             {
                 return DecodeSvgToBitmap(sourceBytes);
             }
@@ -90,11 +92,18 @@ namespace FaviconExtractor
             }
         }
 
-        private static Bitmap NormalizeBitmap(Bitmap source)
+        private static Bitmap NormalizeBitmap(Bitmap source, bool forceResizeToTarget)
         {
-            if (source.Width > 0 && source.Height > 0 && source.Width == source.Height)
+            bool isSquare = source.Width > 0 && source.Height > 0 && source.Width == source.Height;
+            if (!forceResizeToTarget && isSquare)
             {
                 return CloneBitmap(source);
+            }
+
+            if (!isSquare)
+            {
+                int squareSide = Math.Max(source.Width, source.Height);
+                return PadToSquareWithoutResizing(source, squareSide);
             }
 
             int targetSize = FaviconDiscoveryPreferences.NormalizedIconSize;
@@ -109,8 +118,28 @@ namespace FaviconExtractor
                 graphics.SmoothingMode = SmoothingMode.HighQuality;
                 graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-                Rectangle destination = CalculateDestinationRectangle(source.Width, source.Height, targetSize, targetSize);
+                Rectangle destination = CalculateDestinationRectangle(source.Width, source.Height, targetSize, targetSize, forceResizeToTarget);
                 graphics.DrawImage(source, destination);
+            }
+
+            return canvas;
+        }
+
+        private static Bitmap PadToSquareWithoutResizing(Bitmap source, int squareSide)
+        {
+            Bitmap canvas = new Bitmap(squareSide, squareSide, PixelFormat.Format32bppArgb);
+            using (Graphics graphics = Graphics.FromImage(canvas))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.CompositingMode = CompositingMode.SourceOver;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                int x = (squareSide - source.Width) / 2;
+                int y = (squareSide - source.Height) / 2;
+                graphics.DrawImage(source, new Rectangle(x, y, source.Width, source.Height));
             }
 
             return canvas;
@@ -133,7 +162,7 @@ namespace FaviconExtractor
             return clone;
         }
 
-        private static Rectangle CalculateDestinationRectangle(int sourceWidth, int sourceHeight, int targetWidth, int targetHeight)
+        private static Rectangle CalculateDestinationRectangle(int sourceWidth, int sourceHeight, int targetWidth, int targetHeight, bool forceUpscale)
         {
             if (sourceWidth <= 0 || sourceHeight <= 0)
             {
@@ -145,7 +174,8 @@ namespace FaviconExtractor
             double scale = Math.Min(scaleX, scaleY);
             int sourceMaxSide = Math.Max(sourceWidth, sourceHeight);
 
-            if (!FaviconDiscoveryPreferences.UpscaleSmallImagesDuringNormalization
+            if (!forceUpscale
+                && !FaviconDiscoveryPreferences.UpscaleSmallImagesDuringNormalization
                 && scale > 1.0d
                 && sourceMaxSide > FaviconDiscoveryPreferences.TinySourceUpscaleThreshold)
             {

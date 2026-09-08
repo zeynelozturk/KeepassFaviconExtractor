@@ -75,8 +75,8 @@ namespace FaviconExtractor
 
             string normalized = type.ToLowerInvariant();
 
+            if (normalized.Contains("svg")) return 80;
             if (normalized.Contains("png")) return 30;
-            if (normalized.Contains("svg")) return 25;
             if (normalized.Contains("icon") || normalized.Contains("ico")) return 20;
             if (normalized.Contains("jpeg") || normalized.Contains("jpg")) return 10;
             if (normalized.Contains("webp")) return 12;

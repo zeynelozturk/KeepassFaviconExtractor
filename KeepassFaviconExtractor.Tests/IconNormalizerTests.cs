@@ -29,6 +29,23 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void NormalizeToPng_WithSquareSvg_ResizesToTargetCanvas()
+        {
+            const string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='#00aa00'/></svg>";
+            byte[] svgBytes = Encoding.UTF8.GetBytes(svg);
+
+            byte[] normalized = IconNormalizer.NormalizeToPng(svgBytes, "image/svg+xml", "https://example.test/square.svg");
+            AssertPngSignature(normalized);
+
+            using (Bitmap bitmap = LoadBitmap(normalized))
+            {
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Width);
+                Assert.AreEqual(FaviconDiscoveryPreferences.NormalizedIconSize, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(FaviconDiscoveryPreferences.NormalizedIconSize / 2, FaviconDiscoveryPreferences.NormalizedIconSize / 2).G > 0, "Center should contain rendered SVG pixels.");
+            }
+        }
+
+        [TestMethod]
         public void NormalizeToPng_WithSquare32Png_PreservesOriginalDimensions()
         {
             byte[] pngBytes = CreatePngBytes(32, 32, Color.Red);
@@ -41,6 +58,23 @@ namespace FaviconExtractor
                 Assert.AreEqual(32, bitmap.Width);
                 Assert.AreEqual(32, bitmap.Height);
                 Assert.IsTrue(bitmap.GetPixel(16, 16).A > 0, "Center should contain icon pixels.");
+            }
+        }
+
+        [TestMethod]
+        public void NormalizeToPng_WithNonSquarePng_PadsOnlyShorterDimension()
+        {
+            byte[] pngBytes = CreatePngBytes(90, 128, Color.Purple);
+
+            byte[] normalized = IconNormalizer.NormalizeToPng(pngBytes, "image/png", "https://example.test/non-square.png");
+            AssertPngSignature(normalized);
+
+            using (Bitmap bitmap = LoadBitmap(normalized))
+            {
+                Assert.AreEqual(128, bitmap.Width);
+                Assert.AreEqual(128, bitmap.Height);
+                Assert.AreEqual(0, bitmap.GetPixel(0, 64).A, "Left padded area should be transparent.");
+                Assert.IsTrue(bitmap.GetPixel(64, 64).A > 0, "Centered image area should contain pixels.");
             }
         }
 
@@ -81,7 +115,7 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
-        public void NormalizeToPng_WithSvg_Produces64x64Png()
+        public void NormalizeToPng_WithNonSquareSvg_PadsToSquareWithoutTargetResize()
         {
             const string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='16' viewBox='0 0 32 16'><rect x='0' y='0' width='32' height='16' fill='#0000ff'/></svg>";
             byte[] svgBytes = Encoding.UTF8.GetBytes(svg);
@@ -91,9 +125,9 @@ namespace FaviconExtractor
 
             using (Bitmap bitmap = LoadBitmap(normalized))
             {
-                Assert.AreEqual(64, bitmap.Width);
-                Assert.AreEqual(64, bitmap.Height);
-                Assert.IsTrue(bitmap.GetPixel(32, 32).B > 0, "Center should contain rendered SVG pixels.");
+                Assert.AreEqual(32, bitmap.Width);
+                Assert.AreEqual(32, bitmap.Height);
+                Assert.IsTrue(bitmap.GetPixel(16, 16).B > 0, "Center should contain rendered SVG pixels.");
             }
         }
 
