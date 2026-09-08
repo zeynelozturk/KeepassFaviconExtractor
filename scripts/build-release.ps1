@@ -84,6 +84,11 @@ foreach ($file in $runtimeFiles) {
 	Copy-Item $file.FullName (Join-Path $dllOutDir $file.Name)
 }
 
+$nativeSourceDir = Join-Path $buildOutput 'native'
+if (Test-Path $nativeSourceDir) {
+	Copy-Item $nativeSourceDir (Join-Path $dllOutDir 'native') -Recurse -Force
+}
+
 $plgxPath = Join-Path $plgxOutDir 'FaviconExtractor.plgx'
 & (Join-Path $scriptRoot 'build-plgx.ps1') -OutputPath $plgxPath -KeePassExePath $KeePassExePath
 if (-not (Test-Path $plgxPath)) {
