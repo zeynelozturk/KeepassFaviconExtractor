@@ -113,6 +113,13 @@
     <None Include="AGENTS.md" />
     <None Include="app.config" />
     <None Include="Directory.Build.targets" />
+    <None Include="native\THIRD-PARTY-NOTICES.txt" />
+    <None Include="native\x64\libwebp.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="native\x86\libwebp.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
     <None Include="plgx\FaviconExtractor.csproj" />
     <None Include="scripts\bootstrap-keepass.ps1" />
