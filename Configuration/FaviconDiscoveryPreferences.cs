@@ -20,6 +20,7 @@ namespace FaviconExtractor
         public const int ExactHostScoreBonus = 25;
         public const int NormalizedIconSize = 64;
         public const bool UpscaleSmallImagesDuringNormalization = false;
+        public const int TinySourceUpscaleThreshold = 24;
 
         public static readonly IReadOnlyList<string> WellKnownFaviconPaths = new[]
         {

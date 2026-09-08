@@ -121,8 +121,11 @@ namespace FaviconExtractor
             double scaleX = (double)targetWidth / sourceWidth;
             double scaleY = (double)targetHeight / sourceHeight;
             double scale = Math.Min(scaleX, scaleY);
+            int sourceMaxSide = Math.Max(sourceWidth, sourceHeight);
 
-            if (!FaviconDiscoveryPreferences.UpscaleSmallImagesDuringNormalization && scale > 1.0d)
+            if (!FaviconDiscoveryPreferences.UpscaleSmallImagesDuringNormalization
+                && scale > 1.0d
+                && sourceMaxSide > FaviconDiscoveryPreferences.TinySourceUpscaleThreshold)
             {
                 scale = 1.0d;
             }

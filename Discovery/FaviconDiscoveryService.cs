@@ -12,6 +12,9 @@ namespace FaviconExtractor
         private static readonly Regex BlockedStatusCodePattern = new Regex("\\b(401|403|429)\\b", RegexOptions.Compiled);
         private const int SmallHtmlIconThreshold = 24;
         private const int SmallHtmlIconScorePenalty = 260;
+        private const int SmallOrUnknownIconThresholdForAppleTouchPromotion = 32;
+        private const int AppleTouchPromotionMinSize = 120;
+        private const int LargeAppleTouchScoreBonus = 260;
 
         public static async Task<HtmlFaviconDiscoveryResult> DiscoverAsync(string inputUrl)
         {
@@ -111,8 +114,13 @@ namespace FaviconExtractor
                     }
                 }
 
-                List<FaviconCandidate> ranked = mergedCandidates
+                List<FaviconCandidate> candidatesForRanking = mergedCandidates
                     .Where(c => c != null && c.IconUri != null)
+                    .ToList();
+
+                ApplyHtmlCandidatePreferenceAdjustments(candidatesForRanking);
+
+                List<FaviconCandidate> ranked = candidatesForRanking
                     .Select(ApplySelectionAdjustments)
                     .GroupBy(c => c.IconUri.AbsoluteUri, StringComparer.OrdinalIgnoreCase)
                     .Select(g => g.OrderByDescending(c => c.Score).First())
@@ -207,10 +215,96 @@ namespace FaviconExtractor
             return candidate;
         }
 
+        internal static bool ShouldPrioritizeLargeAppleTouchIcon(IReadOnlyList<FaviconCandidate> candidates)
+        {
+            if (candidates == null || candidates.Count == 0)
+            {
+                return false;
+            }
+
+            bool hasSmallOrUnknownHtmlIcon = false;
+            bool hasLargeAppleTouch = false;
+
+            foreach (FaviconCandidate candidate in candidates)
+            {
+                if (!IsHtmlCandidate(candidate))
+                {
+                    continue;
+                }
+
+                if (IsIconRelCandidate(candidate) && (IsSizeUnknown(candidate) || IsSmallSizedIcon(candidate, SmallOrUnknownIconThresholdForAppleTouchPromotion)))
+                {
+                    hasSmallOrUnknownHtmlIcon = true;
+                }
+
+                if (IsAppleTouchCandidate(candidate) && HasAtLeastSize(candidate, AppleTouchPromotionMinSize))
+                {
+                    hasLargeAppleTouch = true;
+                }
+            }
+
+            return hasSmallOrUnknownHtmlIcon && hasLargeAppleTouch;
+        }
+
+        private static void ApplyHtmlCandidatePreferenceAdjustments(List<FaviconCandidate> candidates)
+        {
+            if (!ShouldPrioritizeLargeAppleTouchIcon(candidates))
+            {
+                return;
+            }
+
+            foreach (FaviconCandidate candidate in candidates)
+            {
+                if (IsHtmlCandidate(candidate) && IsAppleTouchCandidate(candidate) && HasAtLeastSize(candidate, AppleTouchPromotionMinSize))
+                {
+                    candidate.Score += LargeAppleTouchScoreBonus;
+                }
+            }
+        }
+
         private static bool IsHtmlCandidate(FaviconCandidate candidate)
         {
             return candidate != null &&
                 string.Equals(candidate.Source, "html-link", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsIconRelCandidate(FaviconCandidate candidate)
+        {
+            if (candidate == null || string.IsNullOrWhiteSpace(candidate.RelAttribute))
+            {
+                return false;
+            }
+
+            string normalized = " " + candidate.RelAttribute.ToLowerInvariant().Replace('\t', ' ') + " ";
+            return normalized.Contains(" icon ");
+        }
+
+        private static bool IsAppleTouchCandidate(FaviconCandidate candidate)
+        {
+            if (candidate == null || string.IsNullOrWhiteSpace(candidate.RelAttribute))
+            {
+                return false;
+            }
+
+            string normalized = " " + candidate.RelAttribute.ToLowerInvariant().Replace('\t', ' ') + " ";
+            return normalized.Contains(" apple-touch-icon ")
+                || normalized.Contains(" apple-touch-icon-precomposed ");
+        }
+
+        private static bool IsSizeUnknown(FaviconCandidate candidate)
+        {
+            return candidate == null || !candidate.BestSize.HasValue;
+        }
+
+        private static bool HasAtLeastSize(FaviconCandidate candidate, int minSize)
+        {
+            if (candidate == null || !candidate.BestSize.HasValue)
+            {
+                return false;
+            }
+
+            int maxSide = Math.Max(candidate.BestSize.Value.Width, candidate.BestSize.Value.Height);
+            return maxSide >= minSize;
         }
 
         private static bool IsSmallSizedIcon(FaviconCandidate candidate, int maxSize)

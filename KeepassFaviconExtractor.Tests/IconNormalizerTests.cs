@@ -13,7 +13,7 @@ namespace FaviconExtractor
     public class IconNormalizerTests
     {
         [TestMethod]
-        public void NormalizeToPng_WithSmallPng_Produces64x64PngWithoutForcedUpscale()
+        public void NormalizeToPng_WithTinyPng_UpscalesForVisibility()
         {
             byte[] pngBytes = CreatePngBytes(16, 16, Color.Red);
 
@@ -25,8 +25,25 @@ namespace FaviconExtractor
                 Assert.AreEqual(64, bitmap.Width);
                 Assert.AreEqual(64, bitmap.Height);
 
-                Assert.AreEqual(0, bitmap.GetPixel(0, 0).A, "Corner should remain transparent.");
-                Assert.AreEqual(0, bitmap.GetPixel(20, 20).A, "Area outside centered 16x16 icon should remain transparent.");
+                Assert.IsTrue(bitmap.GetPixel(0, 0).A > 0, "Tiny sources should be upscaled to fill the canvas for visibility.");
+                Assert.IsTrue(bitmap.GetPixel(32, 32).A > 0, "Center should contain icon pixels.");
+            }
+        }
+
+        [TestMethod]
+        public void NormalizeToPng_WithSmallButNotTinyPng_RemainsCenteredWithoutUpscale()
+        {
+            byte[] pngBytes = CreatePngBytes(32, 32, Color.Red);
+
+            byte[] normalized = IconNormalizer.NormalizeToPng(pngBytes, "image/png", "https://example.test/icon.png");
+            AssertPngSignature(normalized);
+
+            using (Bitmap bitmap = LoadBitmap(normalized))
+            {
+                Assert.AreEqual(64, bitmap.Width);
+                Assert.AreEqual(64, bitmap.Height);
+
+                Assert.AreEqual(0, bitmap.GetPixel(0, 0).A, "Corners should remain transparent when source is above tiny-upscale threshold.");
                 Assert.IsTrue(bitmap.GetPixel(32, 32).A > 0, "Center should contain icon pixels.");
             }
         }
@@ -203,6 +220,62 @@ namespace FaviconExtractor
             bool shouldTry = FaviconDiscoveryService.ShouldTryExternalFallback(htmlCandidates);
 
             Assert.IsFalse(shouldTry);
+        }
+
+        [TestMethod]
+        public void ShouldPrioritizeLargeAppleTouchIcon_WithSmallIconAndLargeAppleTouch_ReturnsTrue()
+        {
+            var candidates = new[]
+            {
+                new FaviconCandidate
+                {
+                    Source = "html-link",
+                    RelAttribute = "icon",
+                    IconUri = new Uri("https://example.test/favicon.ico"),
+                    BestSize = new Size(32, 32),
+                    Score = 630
+                },
+                new FaviconCandidate
+                {
+                    Source = "html-link",
+                    RelAttribute = "apple-touch-icon",
+                    IconUri = new Uri("https://example.test/apple-touch-icon.png"),
+                    BestSize = new Size(192, 192),
+                    Score = 392
+                }
+            };
+
+            bool shouldPrioritize = FaviconDiscoveryService.ShouldPrioritizeLargeAppleTouchIcon(candidates);
+
+            Assert.IsTrue(shouldPrioritize);
+        }
+
+        [TestMethod]
+        public void ShouldPrioritizeLargeAppleTouchIcon_WithoutLargeAppleTouch_ReturnsFalse()
+        {
+            var candidates = new[]
+            {
+                new FaviconCandidate
+                {
+                    Source = "html-link",
+                    RelAttribute = "icon",
+                    IconUri = new Uri("https://example.test/favicon.ico"),
+                    BestSize = new Size(32, 32),
+                    Score = 630
+                },
+                new FaviconCandidate
+                {
+                    Source = "html-link",
+                    RelAttribute = "apple-touch-icon",
+                    IconUri = new Uri("https://example.test/apple-touch-icon.png"),
+                    BestSize = new Size(76, 76),
+                    Score = 276
+                }
+            };
+
+            bool shouldPrioritize = FaviconDiscoveryService.ShouldPrioritizeLargeAppleTouchIcon(candidates);
+
+            Assert.IsFalse(shouldPrioritize);
         }
     }
 }
