@@ -61,7 +61,11 @@ namespace FaviconExtractor
         {
             try
             {
-                using (HttpResponseMessage response = await HttpClient.GetAsync(requestUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
+                using (HttpResponseMessage response = await HttpRetryPolicy.ExecuteWithRetryAsync(
+                    () => HttpClient.GetAsync(requestUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken),
+                    r => r != null && HttpRetryPolicy.IsTransientStatusCode(r.StatusCode),
+                    ex => HttpRetryPolicy.IsTransientException(ex, cancellationToken),
+                    cancellationToken).ConfigureAwait(false))
                 {
                     if (!response.IsSuccessStatusCode)
                     {

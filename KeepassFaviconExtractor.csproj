@@ -13,7 +13,8 @@
     <KeePassDir Condition="'$(KeePassDir)' == ''">$(MSBuildProjectDirectory)\.deps\KeePass\2.61</KeePassDir>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
-    <NuGetPackageImportStamp></NuGetPackageImportStamp>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -100,7 +101,7 @@
     <Compile Include="Discovery\HtmlFaviconDiscoverer.cs" />
     <Compile Include="Discovery\HtmlFaviconDiscoveryResult.cs" />
     <Compile Include="Discovery\WellKnownFaviconDiscoverer.cs" />
-	<Compile Include="Diagnostics\FallbackDiagnosticsService.cs" />
+    <Compile Include="Diagnostics\FallbackDiagnosticsService.cs" />
     <Compile Include="Plugin\FaviconExtractorExt.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Scoring\FaviconScorer.cs" />
@@ -117,6 +118,9 @@
     <None Include="scripts\bootstrap-keepass.ps1" />
     <None Include="scripts\build-plgx.ps1" />
     <None Include="scripts\build-release.ps1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Networking\" />
   </ItemGroup>
   <Target Name="ValidateKeePassReference" BeforeTargets="ResolveAssemblyReferences">
     <Error Condition="!Exists('$(KeePassDir)\KeePass.exe')" Text="KeePass.exe was not found at '$(KeePassDir)\KeePass.exe'. Run scripts\bootstrap-keepass.ps1 or set the KeePassDir MSBuild property to your KeePass 2.61 directory." />
