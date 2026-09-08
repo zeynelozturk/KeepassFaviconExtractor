@@ -1032,6 +1032,8 @@ namespace FaviconExtractor
 
                 Controls.Add(contentPanel);
                 Controls.Add(buttonPanel);
+
+                WireAutoCloseCancellationOnClick(this);
             }
 
             public void SetAssignedIconPreview(byte[] pngBytes)
@@ -1233,6 +1235,35 @@ namespace FaviconExtractor
                 UpdateCloseButtonCountdownText();
             }
 
+            private void OnAnyControlMouseDown(object sender, MouseEventArgs e)
+            {
+                CancelAutoCloseCountdown();
+            }
+
+            private void CancelAutoCloseCountdown()
+            {
+                if (IsDisposed)
+                {
+                    return;
+                }
+
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(CancelAutoCloseCountdown));
+                    return;
+                }
+
+                if (!closeCountdownTimer.Enabled && !pendingAutoClose && countdownSeconds <= 0)
+                {
+                    return;
+                }
+
+                closeCountdownTimer.Stop();
+                pendingAutoClose = false;
+                countdownSeconds = 0;
+                UpdateCloseButtonCountdownText();
+            }
+
             private void UpdateCloseButtonCountdownText()
             {
                 closeButton.Text = countdownSeconds > 0
@@ -1260,6 +1291,20 @@ namespace FaviconExtractor
 
                 pendingAutoClose = false;
                 Close();
+            }
+
+            private void WireAutoCloseCancellationOnClick(Control root)
+            {
+                if (root == null)
+                {
+                    return;
+                }
+
+                root.MouseDown += OnAnyControlMouseDown;
+                foreach (Control child in root.Controls)
+                {
+                    WireAutoCloseCancellationOnClick(child);
+                }
             }
 
             protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
