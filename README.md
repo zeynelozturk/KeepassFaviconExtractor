@@ -9,6 +9,7 @@ website favicons using multiple discovery methods.
 - Multi-source favicon discovery with ranked candidate selection.
 - Automatic retries for transient external-provider failures.
 - SVG, ICO, PNG, and common web image handling with normalization to KeePass-compatible PNG.
+- WEBP decode support via native `libwebp.dll` (x86/x64) when available locally.
 - Defensive SVG conversion that rejects suspicious/cropped render output and falls back.
 - Live extraction status window with cancel support, failure-only retry button, and auto-close on success.
 - Diagnostics window with streaming probe output and per-provider summaries.
@@ -38,6 +39,16 @@ into the ignored `.deps` directory before opening or building the project:
 The script downloads the archive from SourceForge, verifies its pinned SHA-256
 checksum, and extracts it to `.deps\KeePass\2.61`. It is safe to run repeatedly;
 use `-Force` to replace an existing installation.
+
+### Native WEBP decoder dependency
+
+WEBP decoding uses native `libwebp.dll` files. Place them locally at:
+
+- `native\x86\libwebp.dll`
+- `native\x64\libwebp.dll`
+
+The project is configured to copy these DLLs to the output directory.
+These binaries are intentionally ignored by Git in this repository.
 
 To build against an existing KeePass 2.61 installation instead, override the
 MSBuild property:

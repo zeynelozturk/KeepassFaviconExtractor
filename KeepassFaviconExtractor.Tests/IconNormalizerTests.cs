@@ -115,6 +115,41 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void LooksLikeWebp_WithRiffWebpHeader_ReturnsTrue()
+        {
+            byte[] bytes = new byte[16];
+            bytes[0] = (byte)'R';
+            bytes[1] = (byte)'I';
+            bytes[2] = (byte)'F';
+            bytes[3] = (byte)'F';
+            bytes[8] = (byte)'W';
+            bytes[9] = (byte)'E';
+            bytes[10] = (byte)'B';
+            bytes[11] = (byte)'P';
+
+            Assert.IsTrue(WebpDecoder.LooksLikeWebp(bytes));
+        }
+
+        [TestMethod]
+        public void NormalizeToPng_WithInvalidWebpBytes_ThrowsExplicitWebpDecodeFailure()
+        {
+            byte[] invalidWebp = new byte[16];
+            invalidWebp[0] = (byte)'R';
+            invalidWebp[1] = (byte)'I';
+            invalidWebp[2] = (byte)'F';
+            invalidWebp[3] = (byte)'F';
+            invalidWebp[8] = (byte)'W';
+            invalidWebp[9] = (byte)'E';
+            invalidWebp[10] = (byte)'B';
+            invalidWebp[11] = (byte)'P';
+
+            InvalidOperationException ex = Assert.ThrowsException<InvalidOperationException>(() =>
+                IconNormalizer.NormalizeToPng(invalidWebp, "image/webp", "https://example.test/icon.webp"));
+
+            StringAssert.StartsWith(ex.Message, "WEBP decode failed:");
+        }
+
+        [TestMethod]
         public void NormalizeToPng_WithNonSquareSvg_FitsIntoTargetCanvas()
         {
             const string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='16' viewBox='0 0 32 16'><rect x='0' y='0' width='32' height='16' fill='#0000ff'/></svg>";

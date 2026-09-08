@@ -37,8 +37,9 @@ namespace FaviconExtractor
             cancellationToken.ThrowIfCancellationRequested();
 
             bool isSvgSource = IsSvg(contentType, sourceUrl, sourceBytes);
+            bool isWebpSource = IsWebp(contentType, sourceUrl, sourceBytes);
 
-            using (Bitmap sourceBitmap = DecodeToBitmap(sourceBytes, contentType, sourceUrl, isSvgSource, cancellationToken))
+            using (Bitmap sourceBitmap = DecodeToBitmap(sourceBytes, contentType, sourceUrl, isSvgSource, isWebpSource, cancellationToken))
             using (Bitmap normalizedBitmap = NormalizeBitmap(sourceBitmap, isSvgSource))
             using (MemoryStream outputStream = new MemoryStream())
             {
@@ -48,11 +49,23 @@ namespace FaviconExtractor
             }
         }
 
-        private static Bitmap DecodeToBitmap(byte[] sourceBytes, string contentType, string sourceUrl, bool isSvgSource, CancellationToken cancellationToken)
+        private static Bitmap DecodeToBitmap(byte[] sourceBytes, string contentType, string sourceUrl, bool isSvgSource, bool isWebpSource, CancellationToken cancellationToken)
         {
             if (isSvgSource)
             {
                 return DecodeSvgToBitmap(sourceBytes, sourceUrl, cancellationToken);
+            }
+
+            if (isWebpSource)
+            {
+                try
+                {
+                    return WebpDecoder.DecodeToBitmap(sourceBytes);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("WEBP decode failed: " + ex.Message, ex);
+                }
             }
 
             if (IsIco(contentType, sourceUrl, sourceBytes))
@@ -533,6 +546,21 @@ namespace FaviconExtractor
                 && sourceBytes[1] == 0x00
                 && sourceBytes[2] == 0x01
                 && sourceBytes[3] == 0x00;
+        }
+
+        private static bool IsWebp(string contentType, string sourceUrl, byte[] sourceBytes)
+        {
+            if (!string.IsNullOrWhiteSpace(contentType) && contentType.IndexOf("webp", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(sourceUrl) && sourceUrl.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return WebpDecoder.LooksLikeWebp(sourceBytes);
         }
 
         private static string GetTextPrefix(byte[] bytes, int maxByteCount)
