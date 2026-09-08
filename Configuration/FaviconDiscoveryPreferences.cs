@@ -10,9 +10,11 @@ namespace FaviconExtractor
         public static readonly TimeSpan HtmlRequestTimeout = TimeSpan.FromSeconds(3);
         public static readonly TimeSpan FallbackProbeTimeout = TimeSpan.FromSeconds(2);
         public static readonly TimeSpan IconDownloadTimeout = TimeSpan.FromSeconds(8);
+        public static readonly TimeSpan AssignmentTimeout = TimeSpan.FromSeconds(12);
         public const int MaxAutomaticRedirects = 6;
         public const int MaxFallbackRequestsPerLookup = 6;
         public const int MaxFallbackRequestsWhenBlocked = 3;
+        public const int MaxAssignmentAttempts = 5;
         public const int MaxIconDownloadBytes = 1024 * 1024;
         public const int FallbackScorePenalty = 150;
         public const int ExternalServiceScorePenalty = 190;

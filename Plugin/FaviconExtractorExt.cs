@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -132,12 +133,25 @@ namespace FaviconExtractor
                 }
 
                 statusForm.AppendLineSafe("Downloading and assigning icon...");
-                AssignmentAttemptResult assignmentResult = await TryAssignCandidatesToEntryAsync(
-                    selectedEntry,
-                    result.Candidates,
-                    result.PageUri,
-                    cancellationToken,
-                    new StringBuilder()).ConfigureAwait(true);
+                AssignmentAttemptResult assignmentResult;
+                using (CancellationTokenSource assignmentTimeoutCts = new CancellationTokenSource(FaviconDiscoveryPreferences.AssignmentTimeout))
+                using (CancellationTokenSource assignmentCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, assignmentTimeoutCts.Token))
+                {
+                    try
+                    {
+                        assignmentResult = await TryAssignCandidatesToEntryAsync(
+                            selectedEntry,
+                            result.Candidates,
+                            result.PageUri,
+                            assignmentCts.Token,
+                            new StringBuilder(),
+                            statusForm.AppendLineSafe).ConfigureAwait(true);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        assignmentResult = AssignmentAttemptResult.Fail("Timed out while downloading/assigning icon.");
+                    }
+                }
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -211,13 +225,19 @@ namespace FaviconExtractor
             }
         }
 
-        private async System.Threading.Tasks.Task<AssignmentAttemptResult> TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, Uri pageUri, CancellationToken cancellationToken, StringBuilder sb)
+        private async System.Threading.Tasks.Task<AssignmentAttemptResult> TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, Uri pageUri, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
         {
             PwDatabase database = host.Database;
             if (database == null || !database.IsOpen)
             {
                 return AssignmentAttemptResult.Fail("No open KeePass database.");
             }
+
+            ReportStatus(onStatus, "Candidates found: " + candidates.Count);
+
+            int maxAttempts = Math.Max(1, FaviconDiscoveryPreferences.MaxAssignmentAttempts);
+            int attemptedCount = 0;
+            bool hitAttemptLimit = false;
 
             if (candidates == null || candidates.Count == 0)
             {
@@ -257,37 +277,42 @@ namespace FaviconExtractor
                 if (IsUnsupportedForAssignment(candidate))
                 {
                     sb.AppendLine("Candidate #" + (i + 1) + " skipped: unsupported image format for .NET Framework decoder.");
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " skipped (unsupported format).");
                     continue;
+                }
+
+                if (attemptedCount >= maxAttempts)
+                {
+                    hitAttemptLimit = true;
+                    break;
                 }
 
                 try
                 {
+                    ReportStatus(onStatus, "Trying candidate #" + (i + 1) + "...");
+                    attemptedCount++;
                     cancellationToken.ThrowIfCancellationRequested();
 
                     byte[] sourceBytes = await FaviconImageDownloader
                         .DownloadAsync(candidate.IconUri, cancellationToken)
                         .ConfigureAwait(true);
 
-                    byte[] normalizedPng = IconNormalizer.NormalizeToPng(
-                        sourceBytes,
-                        candidate.TypeAttribute,
-                        candidate.IconUri.AbsoluteUri);
-
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    PwUuid currentAssignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(
+                    AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
                         database,
                         selectedEntry,
-                        normalizedPng);
+                        sourceBytes,
+                        candidate.TypeAttribute,
+                        candidate.IconUri.AbsoluteUri,
+                        cancellationToken).ConfigureAwait(true);
 
                     RefreshEntryListIcons(selectedEntry);
 
                     assigned = true;
                     assignedCandidate = candidate;
                     assignedCandidateIndex = i + 1;
-                    assignedNormalizedPngSize = normalizedPng.Length;
-                    assignedNormalizedPngBytes = normalizedPng;
-                    assignedUuid = currentAssignedUuid;
+                    assignedNormalizedPngSize = assignedResult.NormalizedPng.Length;
+                    assignedNormalizedPngBytes = assignedResult.NormalizedPng;
+                    assignedUuid = assignedResult.AssignedUuid;
                     break;
                 }
                 catch (OperationCanceledException)
@@ -299,6 +324,7 @@ namespace FaviconExtractor
                     lastError = ex;
                     highestFailedScoreBeforeAssignment = Math.Max(highestFailedScoreBeforeAssignment, candidate.Score);
                     sb.AppendLine("Candidate #" + (i + 1) + " failed: " + ex.Message);
+                    ReportStatus(onStatus, "Candidate #" + (i + 1) + " failed.");
                 }
             }
 
@@ -312,7 +338,8 @@ namespace FaviconExtractor
 
                 if (shouldPostAssignmentRescue)
                 {
-                    List<FaviconCandidate> rescueCandidates = await TryDiscoverExternalRescueCandidatesAsync(pageUri, cancellationToken, sb).ConfigureAwait(true);
+                    ReportStatus(onStatus, "Checking rescue candidates...");
+                    List<FaviconCandidate> rescueCandidates = await TryDiscoverExternalRescueCandidatesAsync(pageUri, cancellationToken, sb, onStatus).ConfigureAwait(true);
                     List<FaviconCandidate> mergedRescueChain = BuildMergedRescueChain(candidates, rescueCandidates, attemptedUrls);
 
                     if (mergedRescueChain.Count > 0)
@@ -336,38 +363,44 @@ namespace FaviconExtractor
                             if (IsUnsupportedForAssignment(candidate))
                             {
                                 sb.AppendLine("Rescue candidate #" + (i + 1) + " skipped: unsupported image format for .NET Framework decoder.");
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " skipped (unsupported format).");
                                 continue;
+                            }
+
+                            if (attemptedCount >= maxAttempts)
+                            {
+                                hitAttemptLimit = true;
+                                break;
                             }
 
                             try
                             {
+                                ReportStatus(onStatus, "Trying rescue candidate #" + (i + 1) + "...");
+                                attemptedCount++;
                                 cancellationToken.ThrowIfCancellationRequested();
 
                                 byte[] sourceBytes = await FaviconImageDownloader
                                     .DownloadAsync(candidate.IconUri, cancellationToken)
                                     .ConfigureAwait(true);
 
-                                byte[] normalizedPng = IconNormalizer.NormalizeToPng(
-                                    sourceBytes,
-                                    candidate.TypeAttribute,
-                                    candidate.IconUri.AbsoluteUri);
-
-                                cancellationToken.ThrowIfCancellationRequested();
-
-                                PwUuid rescuedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(
+                                AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
                                     database,
                                     selectedEntry,
-                                    normalizedPng);
+                                    sourceBytes,
+                                    candidate.TypeAttribute,
+                                    candidate.IconUri.AbsoluteUri,
+                                    cancellationToken).ConfigureAwait(true);
 
                                 RefreshEntryListIcons(selectedEntry);
 
                                 sb.AppendLine("Assigned custom icon to entry.");
                                 sb.AppendLine("Initially assigned from candidate #" + assignedCandidateIndex + ": " + assignedCandidate.IconUri);
                                 sb.AppendLine("Replaced with rescue candidate #" + (i + 1) + ": " + candidate.IconUri);
-                                sb.AppendLine("Assigned icon UUID: " + rescuedUuid);
-                                sb.AppendLine("Normalized PNG size: " + normalizedPng.Length + " bytes");
+                                sb.AppendLine("Assigned icon UUID: " + assignedResult.AssignedUuid);
+                                sb.AppendLine("Normalized PNG size: " + assignedResult.NormalizedPng.Length + " bytes");
                                 sb.AppendLine();
-                                return AssignmentAttemptResult.SuccessResult(normalizedPng);
+                                ReportStatus(onStatus, "Assigned from rescue candidate #" + (i + 1) + ".");
+                                return AssignmentAttemptResult.SuccessResult(assignedResult.NormalizedPng);
                             }
                             catch (OperationCanceledException)
                             {
@@ -377,6 +410,7 @@ namespace FaviconExtractor
                             {
                                 lastError = ex;
                                 sb.AppendLine("Rescue candidate #" + (i + 1) + " failed: " + ex.Message);
+                                ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " failed.");
                             }
                         }
                     }
@@ -391,12 +425,14 @@ namespace FaviconExtractor
                 sb.AppendLine("Assigned icon UUID: " + assignedUuid);
                 sb.AppendLine("Normalized PNG size: " + assignedNormalizedPngSize + " bytes");
                 sb.AppendLine();
+                ReportStatus(onStatus, "Assigned from candidate #" + assignedCandidateIndex + ".");
                 return AssignmentAttemptResult.SuccessResult(assignedNormalizedPngBytes);
             }
 
             if (ShouldAttemptExternalRescue(attemptedHtmlCandidate, pageUri))
             {
-                List<FaviconCandidate> rescueCandidates = await TryDiscoverExternalRescueCandidatesAsync(pageUri, cancellationToken, sb).ConfigureAwait(true);
+                ReportStatus(onStatus, "Checking rescue candidates...");
+                List<FaviconCandidate> rescueCandidates = await TryDiscoverExternalRescueCandidatesAsync(pageUri, cancellationToken, sb, onStatus).ConfigureAwait(true);
                 List<FaviconCandidate> mergedRescueChain = BuildMergedRescueChain(candidates, rescueCandidates, attemptedUrls);
 
                 if (mergedRescueChain.Count > 0)
@@ -420,37 +456,43 @@ namespace FaviconExtractor
                         if (IsUnsupportedForAssignment(candidate))
                         {
                             sb.AppendLine("Rescue candidate #" + (i + 1) + " skipped: unsupported image format for .NET Framework decoder.");
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " skipped (unsupported format).");
                             continue;
+                        }
+
+                        if (attemptedCount >= maxAttempts)
+                        {
+                            hitAttemptLimit = true;
+                            break;
                         }
 
                         try
                         {
+                            ReportStatus(onStatus, "Trying rescue candidate #" + (i + 1) + "...");
+                            attemptedCount++;
                             cancellationToken.ThrowIfCancellationRequested();
 
                             byte[] sourceBytes = await FaviconImageDownloader
                                 .DownloadAsync(candidate.IconUri, cancellationToken)
                                 .ConfigureAwait(true);
 
-                            byte[] normalizedPng = IconNormalizer.NormalizeToPng(
-                                sourceBytes,
-                                candidate.TypeAttribute,
-                                candidate.IconUri.AbsoluteUri);
-
-                            cancellationToken.ThrowIfCancellationRequested();
-
-                            PwUuid rescueAssignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(
+                            AssignmentExecutionResult assignedResult = await ExecuteNormalizeAndAssignAsync(
                                 database,
                                 selectedEntry,
-                                normalizedPng);
+                                sourceBytes,
+                                candidate.TypeAttribute,
+                                candidate.IconUri.AbsoluteUri,
+                                cancellationToken).ConfigureAwait(true);
 
                             RefreshEntryListIcons(selectedEntry);
 
                             sb.AppendLine("Assigned custom icon to entry.");
                             sb.AppendLine("Assigned from rescue candidate #" + (i + 1) + ": " + candidate.IconUri);
-                            sb.AppendLine("Assigned icon UUID: " + rescueAssignedUuid);
-                            sb.AppendLine("Normalized PNG size: " + normalizedPng.Length + " bytes");
+                            sb.AppendLine("Assigned icon UUID: " + assignedResult.AssignedUuid);
+                            sb.AppendLine("Normalized PNG size: " + assignedResult.NormalizedPng.Length + " bytes");
                             sb.AppendLine();
-                            return AssignmentAttemptResult.SuccessResult(normalizedPng);
+                            ReportStatus(onStatus, "Assigned from rescue candidate #" + (i + 1) + ".");
+                            return AssignmentAttemptResult.SuccessResult(assignedResult.NormalizedPng);
                         }
                         catch (OperationCanceledException)
                         {
@@ -460,6 +502,7 @@ namespace FaviconExtractor
                         {
                             lastError = ex;
                             sb.AppendLine("Rescue candidate #" + (i + 1) + " failed: " + ex.Message);
+                            ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " failed.");
                         }
                     }
                 }
@@ -472,12 +515,50 @@ namespace FaviconExtractor
             sb.AppendLine("Assignment failed: all candidates failed.");
             sb.AppendLine();
 
+            if (hitAttemptLimit)
+            {
+                ReportStatus(onStatus, "Attempt limit reached.");
+                return AssignmentAttemptResult.Fail("Reached assignment attempt limit (" + maxAttempts + ").");
+            }
+
             return AssignmentAttemptResult.Fail(lastError != null ? lastError.Message : "All candidate downloads failed.");
+        }
+
+        private static async System.Threading.Tasks.Task<AssignmentExecutionResult> ExecuteNormalizeAndAssignAsync(
+            PwDatabase database,
+            PwEntry selectedEntry,
+            byte[] sourceBytes,
+            string typeAttribute,
+            string iconUrl,
+            CancellationToken cancellationToken)
+        {
+            return await System.Threading.Tasks.Task.Run(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                byte[] normalizedPng = IconNormalizer.NormalizeToPng(sourceBytes, typeAttribute, iconUrl);
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                PwUuid assignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(database, selectedEntry, normalizedPng);
+
+                return new AssignmentExecutionResult
+                {
+                    NormalizedPng = normalizedPng,
+                    AssignedUuid = assignedUuid
+                };
+            }, cancellationToken).ConfigureAwait(false);
         }
 
         private static bool ShouldAttemptExternalRescue(bool attemptedHtmlCandidate, Uri pageUri)
         {
             return attemptedHtmlCandidate && pageUri != null;
+        }
+
+        private sealed class AssignmentExecutionResult
+        {
+            public byte[] NormalizedPng { get; set; }
+            public PwUuid AssignedUuid { get; set; }
         }
 
         private static bool ShouldAttemptPostAssignmentRescue(bool attemptedHtmlCandidate, Uri pageUri, FaviconCandidate assignedCandidate, int highestFailedScoreBeforeAssignment)
@@ -503,7 +584,7 @@ namespace FaviconExtractor
             return highestFailedScoreBeforeAssignment > assignedCandidate.Score;
         }
 
-        private static async System.Threading.Tasks.Task<List<FaviconCandidate>> TryDiscoverExternalRescueCandidatesAsync(Uri pageUri, CancellationToken cancellationToken, StringBuilder sb)
+        private static async System.Threading.Tasks.Task<List<FaviconCandidate>> TryDiscoverExternalRescueCandidatesAsync(Uri pageUri, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
         {
             if (pageUri == null)
             {
@@ -526,12 +607,22 @@ namespace FaviconExtractor
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 sb.AppendLine("External rescue discovery timed out.");
+                ReportStatus(onStatus, "Rescue discovery timed out.");
                 return new List<FaviconCandidate>();
             }
             catch (Exception ex)
             {
                 sb.AppendLine("External rescue discovery failed: " + ex.Message);
+                ReportStatus(onStatus, "Rescue discovery failed.");
                 return new List<FaviconCandidate>();
+            }
+        }
+
+        private static void ReportStatus(Action<string> onStatus, string line)
+        {
+            if (onStatus != null && !string.IsNullOrWhiteSpace(line))
+            {
+                onStatus(line);
             }
         }
 
@@ -681,7 +772,7 @@ namespace FaviconExtractor
         private sealed class ExtractionStatusForm : Form
         {
             private readonly TextBox outputTextBox;
-            private readonly PictureBox iconPreviewBox;
+            private readonly RoundedPictureBox iconPreviewBox;
             private readonly Button cancelButton;
             private readonly Button closeButton;
             private readonly System.Windows.Forms.Timer closeCountdownTimer;
@@ -705,24 +796,26 @@ namespace FaviconExtractor
                 outputTextBox.WordWrap = true;
                 outputTextBox.Dock = DockStyle.Fill;
 
-                iconPreviewBox = new PictureBox();
+                iconPreviewBox = new RoundedPictureBox();
                 iconPreviewBox.Width = 72;
                 iconPreviewBox.Height = 72;
                 iconPreviewBox.SizeMode = PictureBoxSizeMode.Zoom;
-                iconPreviewBox.BorderStyle = BorderStyle.FixedSingle;
                 iconPreviewBox.Margin = new Padding(0, 0, 8, 0);
 
-                FlowLayoutPanel contentPanel = new FlowLayoutPanel();
+                TableLayoutPanel contentPanel = new TableLayoutPanel();
                 contentPanel.Dock = DockStyle.Fill;
-                contentPanel.FlowDirection = FlowDirection.LeftToRight;
-                contentPanel.WrapContents = false;
                 contentPanel.Padding = new Padding(8, 8, 8, 0);
+                contentPanel.ColumnCount = 2;
+                contentPanel.RowCount = 1;
+                contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80f));
+                contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                contentPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-                outputTextBox.Width = Width - 120;
-                outputTextBox.Height = Height - 80;
+                iconPreviewBox.Dock = DockStyle.Top;
+                outputTextBox.Dock = DockStyle.Fill;
 
-                contentPanel.Controls.Add(iconPreviewBox);
-                contentPanel.Controls.Add(outputTextBox);
+                contentPanel.Controls.Add(iconPreviewBox, 0, 0);
+                contentPanel.Controls.Add(outputTextBox, 1, 0);
 
                 FlowLayoutPanel buttonPanel = new FlowLayoutPanel();
                 buttonPanel.Dock = DockStyle.Bottom;
@@ -906,6 +999,25 @@ namespace FaviconExtractor
                     : "OK";
             }
 
+            protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+            {
+                if (keyData == Keys.Escape)
+                {
+                    if (cancelButton.Enabled)
+                    {
+                        OnCancelClick(this, EventArgs.Empty);
+                    }
+                    else if (closeButton.Enabled)
+                    {
+                        Close();
+                    }
+
+                    return true;
+                }
+
+                return base.ProcessCmdKey(ref msg, keyData);
+            }
+
             protected override void OnFormClosed(FormClosedEventArgs e)
             {
                 closeCountdownTimer.Stop();
@@ -918,6 +1030,58 @@ namespace FaviconExtractor
                 }
 
                 base.OnFormClosed(e);
+            }
+        }
+
+        private sealed class RoundedPictureBox : PictureBox
+        {
+            private const int CornerRadius = 8;
+
+            protected override void OnPaint(PaintEventArgs pe)
+            {
+                Graphics graphics = pe.Graphics;
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+                using (GraphicsPath path = CreateRoundedRectPath(ClientRectangle, CornerRadius))
+                {
+                    Region = new Region(path);
+
+                    using (SolidBrush backBrush = new SolidBrush(BackColor))
+                    {
+                        graphics.FillPath(backBrush, path);
+                    }
+
+                    if (Image != null)
+                    {
+                        Region previousClip = graphics.Clip;
+                        graphics.SetClip(path);
+                        graphics.DrawImage(Image, ClientRectangle);
+                        graphics.Clip = previousClip;
+                    }
+
+                    using (Pen borderPen = new Pen(Color.Gray, 1f))
+                    {
+                        graphics.DrawPath(borderPen, path);
+                    }
+                }
+            }
+
+            private static GraphicsPath CreateRoundedRectPath(Rectangle rect, int radius)
+            {
+                int diameter = Math.Max(1, radius * 2);
+                Rectangle arc = new Rectangle(rect.X, rect.Y, diameter, diameter);
+                GraphicsPath path = new GraphicsPath();
+
+                path.AddArc(arc, 180, 90);
+                arc.X = rect.Right - diameter;
+                path.AddArc(arc, 270, 90);
+                arc.Y = rect.Bottom - diameter;
+                path.AddArc(arc, 0, 90);
+                arc.X = rect.X;
+                path.AddArc(arc, 90, 90);
+                path.CloseFigure();
+
+                return path;
             }
         }
 
