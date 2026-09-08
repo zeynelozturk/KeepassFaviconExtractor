@@ -25,11 +25,11 @@ namespace FaviconExtractor
             foreach (string domain in GetDomainCandidates(siteUri.DnsSafeHost))
             {
                 bool isExactHost = string.Equals(domain, siteUri.DnsSafeHost, StringComparison.OrdinalIgnoreCase);
-                Uri googleUri = new Uri("https://www.google.com/s2/favicons?domain=" + Uri.EscapeDataString(domain) + "&sz=64");
-                probes.Add(ProbeSingleCandidateAsync(googleUri, "external-google-s2", false, isExactHost, cancellationToken));
-
-                Uri faviconImUri = new Uri("https://a.favicon.im/" + Uri.EscapeDataString(domain) + "?larger=true");
-                probes.Add(ProbeSingleCandidateAsync(faviconImUri, "external-favicon-im", false, isExactHost, cancellationToken));
+                foreach (string source in ExternalProviderSources)
+                {
+                    Uri requestUri = BuildProviderUri(source, domain);
+                    probes.Add(ProbeSingleCandidateAsync(requestUri, source, false, isExactHost, cancellationToken));
+                }
             }
 
             FaviconCandidate[] results = await Task.WhenAll(probes).ConfigureAwait(false);
@@ -90,14 +90,7 @@ namespace FaviconExtractor
                     string rel = treatAsLogo ? "logo" : "icon";
                     int score = FaviconScorer.Score("icon", type, size);
                     score = FaviconScorer.ApplyExternalServicePenalty(score);
-                    if (string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase))
-                    {
-                        score += FaviconDiscoveryPreferences.GoogleExternalScoreBonus;
-                    }
-                    else if (string.Equals(source, "external-favicon-im", StringComparison.OrdinalIgnoreCase))
-                    {
-                        score -= FaviconDiscoveryPreferences.FaviconImExternalScorePenalty;
-                    }
+                    score += GetExternalSourceScoreAdjustment(source);
 
                     if (isExactHost)
                     {
@@ -159,6 +152,81 @@ namespace FaviconExtractor
             return candidates;
         }
 
+        internal static readonly string[] ExternalProviderSources = new[]
+        {
+            "external-google-s2",
+            "external-duckduckgo-ip3",
+            "external-favicone",
+            "external-vemetric",
+            "external-favicon-im"
+        };
+
+        internal static Uri BuildProviderUri(string source, string domain)
+        {
+            if (string.IsNullOrWhiteSpace(domain))
+            {
+                throw new ArgumentException("Domain is required.", nameof(domain));
+            }
+
+            string escapedDomain = Uri.EscapeDataString(domain);
+            if (string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Uri("https://www.google.com/s2/favicons?domain=" + escapedDomain + "&sz=64");
+            }
+
+            if (string.Equals(source, "external-duckduckgo-ip3", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Uri("https://icons.duckduckgo.com/ip3/" + escapedDomain + ".ico");
+            }
+
+            if (string.Equals(source, "external-favicone", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Uri("https://favicone.com/" + escapedDomain + "?s=128");
+            }
+
+            if (string.Equals(source, "external-vemetric", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Uri("https://favicon.vemetric.com/" + escapedDomain);
+            }
+
+            if (string.Equals(source, "external-favicon-im", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Uri("https://a.favicon.im/" + escapedDomain + "?larger=true");
+            }
+
+            throw new ArgumentException("Unsupported external provider source: " + source, nameof(source));
+        }
+
+        internal static int GetExternalSourceScoreAdjustment(string source)
+        {
+            if (string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase))
+            {
+                return FaviconDiscoveryPreferences.GoogleExternalScoreBonus;
+            }
+
+            if (string.Equals(source, "external-duckduckgo-ip3", StringComparison.OrdinalIgnoreCase))
+            {
+                return FaviconDiscoveryPreferences.DuckDuckGoExternalScoreBonus;
+            }
+
+            if (string.Equals(source, "external-favicone", StringComparison.OrdinalIgnoreCase))
+            {
+                return FaviconDiscoveryPreferences.FaviconeExternalScoreBonus;
+            }
+
+            if (string.Equals(source, "external-vemetric", StringComparison.OrdinalIgnoreCase))
+            {
+                return FaviconDiscoveryPreferences.VemetricExternalScoreBonus;
+            }
+
+            if (string.Equals(source, "external-favicon-im", StringComparison.OrdinalIgnoreCase))
+            {
+                return -FaviconDiscoveryPreferences.FaviconImExternalScorePenalty;
+            }
+
+            return 0;
+        }
+
         private static bool LooksLikeImage(string type, Uri uri)
         {
             if (!string.IsNullOrWhiteSpace(type))
@@ -177,7 +245,10 @@ namespace FaviconExtractor
                 || absolute.EndsWith(".webp")
                 || absolute.EndsWith(".gif")
                 || absolute.Contains("/s2/favicons")
-                || absolute.Contains("favicon.im");
+                || absolute.Contains("favicon.im")
+                || absolute.Contains("icons.duckduckgo.com/ip3/")
+                || absolute.Contains("favicone.com/")
+                || absolute.Contains("favicon.vemetric.com/");
         }
 
         private static Uri GetCandidateIconUri(Uri requestUri, Uri finalUri, string source)

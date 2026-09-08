@@ -307,5 +307,42 @@ namespace FaviconExtractor
 
             Assert.IsFalse(shouldPrioritize);
         }
+
+        [TestMethod]
+        public void BuildProviderUri_UsesExpectedTemplates()
+        {
+            string domain = "hot.mail.com";
+
+            Assert.AreEqual(
+                "https://www.google.com/s2/favicons?domain=hot.mail.com&sz=64",
+                ExternalFaviconServiceDiscoverer.BuildProviderUri("external-google-s2", domain).AbsoluteUri);
+            Assert.AreEqual(
+                "https://icons.duckduckgo.com/ip3/hot.mail.com.ico",
+                ExternalFaviconServiceDiscoverer.BuildProviderUri("external-duckduckgo-ip3", domain).AbsoluteUri);
+            Assert.AreEqual(
+                "https://favicone.com/hot.mail.com?s=128",
+                ExternalFaviconServiceDiscoverer.BuildProviderUri("external-favicone", domain).AbsoluteUri);
+            Assert.AreEqual(
+                "https://favicon.vemetric.com/hot.mail.com",
+                ExternalFaviconServiceDiscoverer.BuildProviderUri("external-vemetric", domain).AbsoluteUri);
+            Assert.AreEqual(
+                "https://a.favicon.im/hot.mail.com?larger=true",
+                ExternalFaviconServiceDiscoverer.BuildProviderUri("external-favicon-im", domain).AbsoluteUri);
+        }
+
+        [TestMethod]
+        public void GetExternalSourceScoreAdjustment_FollowsConfiguredPriority()
+        {
+            int google = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-google-s2");
+            int duck = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-duckduckgo-ip3");
+            int favicone = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-favicone");
+            int vemetric = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-vemetric");
+            int faviconIm = ExternalFaviconServiceDiscoverer.GetExternalSourceScoreAdjustment("external-favicon-im");
+
+            Assert.IsTrue(google > duck);
+            Assert.IsTrue(duck > favicone);
+            Assert.IsTrue(favicone > vemetric);
+            Assert.IsTrue(vemetric > faviconIm);
+        }
     }
 }
