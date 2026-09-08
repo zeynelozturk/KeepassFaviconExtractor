@@ -90,17 +90,16 @@ namespace FaviconExtractor
                 throw new ArgumentException("WEBP source bytes are empty.", nameof(webpBytes));
             }
 
-            // Ensure we've attempted to load the native runtime. If the probe has already
-            // run and determined the native runtime is unavailable, short-circuit so callers
-            // receive a quick, deterministic failure and the pipeline can fallback.
-            if (!nativeLoadAttempted)
+            // Ensure native runtime is available. If the first probe ran before files were
+            // present, allow a later call to re-probe.
+            if (!nativeAvailable)
             {
                 EnsureNativeLoaded();
             }
 
             if (!nativeAvailable)
             {
-                throw new InvalidOperationException("WEBP native runtime is not available. See diagnostics for details.");
+                throw new InvalidOperationException("WEBP native runtime is not available. " + (nativeLoadFailureMessage ?? "See diagnostics for details."));
             }
 
             int width;
@@ -183,7 +182,7 @@ namespace FaviconExtractor
 
             lock (NativeLoadSync)
             {
-                if (nativeModuleHandle != IntPtr.Zero || nativeLoadAttempted)
+                if (nativeModuleHandle != IntPtr.Zero || nativeAvailable)
                 {
                     return;
                 }
@@ -202,6 +201,7 @@ namespace FaviconExtractor
                 if (nativeLoadAttempted && !anyCandidateExists)
                 {
                     // We've attempted before and still no candidate files — skip re-attempt.
+                    nativeLoadFailureMessage = "No libwebp.dll candidate file found for architecture '" + architectureFolder + "'.";
                     return;
                 }
 
@@ -229,8 +229,18 @@ namespace FaviconExtractor
                     if (handle != IntPtr.Zero)
                     {
                         nativeModuleHandle = handle;
+                        nativeAvailable = true;
+                        nativeLoadFailureMessage = null;
                         return;
                     }
+
+                    int error = Marshal.GetLastWin32Error();
+                    nativeLoadFailureMessage = "Failed loading libwebp.dll at '" + candidatePath + "' (Win32=" + error + ").";
+                }
+
+                if (!anyCandidateExists)
+                {
+                    nativeLoadFailureMessage = "No libwebp.dll candidate file found for architecture '" + architectureFolder + "'.";
                 }
             }
         }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -121,7 +122,8 @@ namespace FaviconExtractor
 
         private static void AppendWebpDecoderStatus(StringBuilder sb, Action<string> onLine)
         {
-            AppendLine(sb, "WebP loader paths: " + WebpDecoder.GetRuntimeDiagnosticInfo(), onLine);
+            string beforeProbe = WebpDecoder.GetRuntimeDiagnosticInfo();
+            AppendLine(sb, "WebP loader: " + SummarizeWebpRuntimeInfo(beforeProbe), onLine);
             try
             {
                 byte[] webpSample = Convert.FromBase64String(WebpDiagnosticSampleBase64);
@@ -130,6 +132,9 @@ namespace FaviconExtractor
                     bool ok = bitmap.Width > 0 && bitmap.Height > 0;
                     AppendLine(sb, "WebP native decoder: " + (ok ? "OK (embedded sample decoded)" : "FAIL (decoded image has invalid dimensions)"), onLine);
                 }
+
+                string afterProbe = WebpDecoder.GetRuntimeDiagnosticInfo();
+                AppendLine(sb, "WebP loader (after probe): " + SummarizeWebpRuntimeInfo(afterProbe), onLine);
             }
             catch (Exception ex)
             {
@@ -146,7 +151,90 @@ namespace FaviconExtractor
                 {
                     AppendLine(sb, "WebP native decoder inner: " + ex.InnerException.GetType().Name + ": " + ex.InnerException.Message, onLine);
                 }
+
+                string afterProbe = WebpDecoder.GetRuntimeDiagnosticInfo();
+                AppendLine(sb, "WebP loader (after probe): " + SummarizeWebpRuntimeInfo(afterProbe), onLine);
             }
+        }
+
+        private static string SummarizeWebpRuntimeInfo(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return "unavailable";
+            }
+
+            string bitness = ExtractDiagnosticValue(raw, "process-bitness=") ?? "unknown";
+            string available = ExtractDiagnosticValue(raw, "webp-native-available=") ?? "unknown";
+            string failure = ExtractDiagnosticValue(raw, "webp-native-failure=");
+
+            string foundWebp = ExtractFirstFoundPath(raw, "libwebp.dll");
+            string foundSharpYuv = ExtractFirstFoundPath(raw, "libsharpyuv.dll");
+
+            List<string> parts = new List<string>();
+            parts.Add("process=" + bitness);
+            parts.Add("available=" + available);
+
+            if (!string.IsNullOrWhiteSpace(foundWebp))
+            {
+                string folder = Path.GetDirectoryName(foundWebp) ?? foundWebp;
+                parts.Add("location=" + folder);
+            }
+            else
+            {
+                parts.Add("location=not-found");
+            }
+
+            parts.Add("libwebp=" + (!string.IsNullOrWhiteSpace(foundWebp) ? "FOUND" : "MISS"));
+            parts.Add("libsharpyuv=" + (!string.IsNullOrWhiteSpace(foundSharpYuv) ? "FOUND" : "MISS"));
+
+            if (!string.IsNullOrWhiteSpace(failure))
+            {
+                parts.Add("failure=" + TruncateDiagnosticValue(failure, 120));
+            }
+
+            return string.Join(", ", parts.ToArray());
+        }
+
+        private static string ExtractDiagnosticValue(string raw, string key)
+        {
+            string[] segments = raw.Split(new[] { " | " }, StringSplitOptions.None);
+            for (int i = 0; i < segments.Length; i++)
+            {
+                string segment = segments[i];
+                if (segment.StartsWith(key, StringComparison.OrdinalIgnoreCase))
+                {
+                    return segment.Substring(key.Length);
+                }
+            }
+
+            return null;
+        }
+
+        private static string ExtractFirstFoundPath(string raw, string fileName)
+        {
+            string[] segments = raw.Split(new[] { " | " }, StringSplitOptions.None);
+            for (int i = 0; i < segments.Length; i++)
+            {
+                string segment = segments[i];
+                if (segment.StartsWith("FOUND ", StringComparison.OrdinalIgnoreCase)
+                    && segment.EndsWith(fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return segment.Substring("FOUND ".Length);
+                }
+            }
+
+            return null;
+        }
+
+        private static string TruncateDiagnosticValue(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+            {
+                return value;
+            }
+
+            return value.Substring(0, maxLength - 3) + "...";
         }
 
         private static void AppendLine(StringBuilder sb, string line, Action<string> onLine)
