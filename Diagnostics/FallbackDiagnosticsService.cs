@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -11,6 +12,7 @@ namespace FaviconExtractor
     internal static class FallbackDiagnosticsService
     {
         private static readonly HttpClient HttpClient = CreateHttpClient();
+        private const string WebpDiagnosticSampleBase64 = "UklGRqIBAABXRUJQVlA4TJUBAAAvH8AHELfCIGDbNuZPt7uJbdFA0LZtvO38IT8M27aNpOvtv26/O1uMIklSlALW/2t1sYFVQIdB/pACBDEQpQJEmYLGb3yAqnFZPI6I1xUBWQCvLQqKsIBMqKhxmCDU7RgHUIogHNMKiyoA+juAEAQx6tc/nxJpxd8VEoWsOsqvnbL6+nwqZLDCw1QSPmFKg4wkDA1ZuPXeKKMDYiTbpq25z37vG+/btm3va+Sfis/5EUT0H23btqGQuZN7RBQX+I4lhVmOH0SpQs8UxUwvTM4VjdwwijzRyosCU48Z+JL1d37xlXY5PLQlne/kODKM/lXio0dpIyP31VOg+xtbA2pPmUclx1sZStci9w2g9SrF2SPApthTQGlbVFoGZuS4BIyLkpMS9L8GQOtRzU8XSouAsSWKrQIGMPan6qUJQPVWlFtPmRd1n22g+azhrAQsaZw9AVQfNNyUgGlbwxAwDjTuvQ50vjXsAcyJhhWA/eJ95VkAKu/F88uzU4JRu4jjS167k7N3UsTX35X2LvV3/Q//gva/EgEA";
 
         private static readonly string[] ProbeDomains = new[]
         {
@@ -34,6 +36,8 @@ namespace FaviconExtractor
             AppendLine(sb, "External fallback diagnostics", onLine);
             AppendLine(sb, string.Empty, onLine);
             AppendLine(sb, "Providers are checked with live HTTP probes. Results can vary due to network/provider state.", onLine);
+            AppendLine(sb, string.Empty, onLine);
+            AppendWebpDecoderStatus(sb, onLine);
             AppendLine(sb, string.Empty, onLine);
 
             foreach (string source in ExternalFaviconServiceDiscoverer.ExternalProviderSources)
@@ -113,6 +117,23 @@ namespace FaviconExtractor
             }
 
             return sb.ToString();
+        }
+
+        private static void AppendWebpDecoderStatus(StringBuilder sb, Action<string> onLine)
+        {
+            try
+            {
+                byte[] webpSample = Convert.FromBase64String(WebpDiagnosticSampleBase64);
+                using (Bitmap bitmap = WebpDecoder.DecodeToBitmap(webpSample))
+                {
+                    bool ok = bitmap.Width > 0 && bitmap.Height > 0;
+                    AppendLine(sb, "WebP native decoder: " + (ok ? "OK (embedded sample decoded)" : "FAIL (decoded image has invalid dimensions)"), onLine);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLine(sb, "WebP native decoder: FAIL (" + ex.GetType().Name + ")", onLine);
+            }
         }
 
         private static void AppendLine(StringBuilder sb, string line, Action<string> onLine)
