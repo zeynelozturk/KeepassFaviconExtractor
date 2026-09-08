@@ -199,7 +199,7 @@ namespace FaviconExtractor
                     }
                     statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Success: icon assigned.");
-                    statusForm.MarkCompletedWithCountdown(2);
+                    statusForm.MarkCompletedWithCountdown(3);
                     return;
                 }
 
@@ -923,6 +923,7 @@ namespace FaviconExtractor
         {
             private readonly TextBox outputTextBox;
             private readonly RoundedPictureBox iconPreviewBox;
+            private readonly Label iconSizeLabel;
             private readonly Button cancelButton;
             private readonly Button retryButton;
             private readonly Button closeButton;
@@ -980,7 +981,16 @@ namespace FaviconExtractor
                 iconPreviewBox.Width = 72;
                 iconPreviewBox.Height = 72;
                 iconPreviewBox.SizeMode = PictureBoxSizeMode.Zoom;
-                iconPreviewBox.Margin = new Padding(0, 0, 8, 0);
+                // pull the preview slightly upward so it sits a bit higher in the left column
+                iconPreviewBox.Margin = new Padding(0, -6, 0, 0);
+
+                iconSizeLabel = new Label();
+                iconSizeLabel.Text = string.Empty;
+                iconSizeLabel.TextAlign = ContentAlignment.MiddleCenter;
+                iconSizeLabel.AutoSize = false;
+                iconSizeLabel.Height = 20;
+                iconSizeLabel.Dock = DockStyle.Top;
+                iconSizeLabel.Margin = new Padding(0, 4, 8, 0);
 
                 TableLayoutPanel contentPanel = new TableLayoutPanel();
                 contentPanel.Dock = DockStyle.Fill;
@@ -991,10 +1001,29 @@ namespace FaviconExtractor
                 contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
                 contentPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-                iconPreviewBox.Dock = DockStyle.Top;
+                // Do not dock the preview so it can be centered within the left column
+                iconPreviewBox.Dock = DockStyle.None;
+                iconPreviewBox.Anchor = AnchorStyles.None;
                 outputTextBox.Dock = DockStyle.Fill;
 
-                contentPanel.Controls.Add(iconPreviewBox, 0, 0);
+                // Left column: icon preview above a centered size label
+                TableLayoutPanel leftPanel = new TableLayoutPanel();
+                leftPanel.RowCount = 2;
+                leftPanel.ColumnCount = 1;
+                // make the single column stretch so child controls can be centered
+                leftPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                leftPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                leftPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                leftPanel.Dock = DockStyle.Fill;
+                leftPanel.Controls.Add(iconPreviewBox, 0, 0);
+                leftPanel.Controls.Add(iconSizeLabel, 0, 1);
+                // ensure controls are centered inside the cell
+                iconPreviewBox.Anchor = AnchorStyles.None;
+                iconSizeLabel.Anchor = AnchorStyles.None;
+                // make label match preview width to keep centered look
+                iconSizeLabel.Width = iconPreviewBox.Width;
+
+                contentPanel.Controls.Add(leftPanel, 0, 0);
                 contentPanel.Controls.Add(outputTextBox, 1, 0);
 
                 FlowLayoutPanel buttonPanel = new FlowLayoutPanel();
@@ -1050,15 +1079,27 @@ namespace FaviconExtractor
                 }
 
                 Image previous = iconPreviewBox.Image;
+                Size? newSize = null;
                 using (MemoryStream ms = new MemoryStream(pngBytes))
                 using (Image source = Image.FromStream(ms))
                 {
                     iconPreviewBox.Image = new Bitmap(source);
+                    newSize = source?.Size;
                 }
 
                 if (previous != null)
                 {
                     previous.Dispose();
+                }
+
+                // Update size label
+                if (newSize.HasValue)
+                {
+                    iconSizeLabel.Text = newSize.Value.Width + " x " + newSize.Value.Height;
+                }
+                else
+                {
+                    iconSizeLabel.Text = string.Empty;
                 }
             }
 
@@ -1357,6 +1398,19 @@ namespace FaviconExtractor
                 {
                     iconPreviewBox.Image = null;
                     image.Dispose();
+                }
+
+                // Clear size label as well
+                try
+                {
+                    if (iconSizeLabel != null)
+                    {
+                        iconSizeLabel.Text = string.Empty;
+                    }
+                }
+                catch
+                {
+                    // ignore UI clear errors
                 }
             }
         }
