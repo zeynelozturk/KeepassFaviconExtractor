@@ -926,11 +926,14 @@ namespace FaviconExtractor
             private readonly Button cancelButton;
             private readonly Button retryButton;
             private readonly Button closeButton;
+            private readonly ContextMenuStrip outputContextMenu;
             private readonly System.Windows.Forms.Timer closeCountdownTimer;
             private Action cancelAction;
             private Action retryAction;
             private int countdownSeconds;
             private bool isInProgress;
+            private bool isOutputContextMenuOpen;
+            private bool pendingAutoClose;
 
             public ExtractionStatusForm()
             {
@@ -948,6 +951,30 @@ namespace FaviconExtractor
                 outputTextBox.ScrollBars = ScrollBars.Vertical;
                 outputTextBox.WordWrap = true;
                 outputTextBox.Dock = DockStyle.Fill;
+
+                outputContextMenu = new ContextMenuStrip();
+                ToolStripMenuItem copyMenuItem = new ToolStripMenuItem("Copy");
+                copyMenuItem.Click += (_, __) =>
+                {
+                    if (!string.IsNullOrEmpty(outputTextBox.SelectedText))
+                    {
+                        Clipboard.SetText(outputTextBox.SelectedText);
+                    }
+                };
+
+                ToolStripMenuItem selectAllMenuItem = new ToolStripMenuItem("Select All");
+                selectAllMenuItem.Click += (_, __) => outputTextBox.SelectAll();
+
+                outputContextMenu.Items.Add(copyMenuItem);
+                outputContextMenu.Items.Add(selectAllMenuItem);
+                outputContextMenu.Opening += (_, __) => isOutputContextMenuOpen = true;
+                outputContextMenu.Closed += (_, __) =>
+                {
+                    isOutputContextMenuOpen = false;
+                    TryCompletePendingAutoClose();
+                };
+
+                outputTextBox.ContextMenuStrip = outputContextMenu;
 
                 iconPreviewBox = new RoundedPictureBox();
                 iconPreviewBox.Width = 72;
@@ -1059,6 +1086,8 @@ namespace FaviconExtractor
                 closeCountdownTimer.Stop();
                 outputTextBox.Clear();
                 ClearPreviewImage();
+                pendingAutoClose = false;
+                isOutputContextMenuOpen = false;
                 cancelButton.Enabled = true;
                 closeButton.Text = "OK";
                 closeButton.Enabled = false;
@@ -1190,6 +1219,13 @@ namespace FaviconExtractor
                 if (countdownSeconds <= 0)
                 {
                     closeCountdownTimer.Stop();
+                    if (isOutputContextMenuOpen)
+                    {
+                        pendingAutoClose = true;
+                        closeButton.Text = "OK";
+                        return;
+                    }
+
                     Close();
                     return;
                 }
@@ -1202,6 +1238,28 @@ namespace FaviconExtractor
                 closeButton.Text = countdownSeconds > 0
                     ? "OK (" + countdownSeconds + ")"
                     : "OK";
+            }
+
+            private void TryCompletePendingAutoClose()
+            {
+                if (!pendingAutoClose || IsDisposed)
+                {
+                    return;
+                }
+
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(TryCompletePendingAutoClose));
+                    return;
+                }
+
+                if (isOutputContextMenuOpen)
+                {
+                    return;
+                }
+
+                pendingAutoClose = false;
+                Close();
             }
 
             protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
