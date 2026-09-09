@@ -20,3 +20,4 @@ Next:
 - If there is no URL, the plugin can just offer a logo it found depending on the entry's title or other metadata.
 - After finished, add an Options dialog and add a "Show fetch details" checkbox to the Options dialog.
 - Updating multiple entries at once.
+- Extracting icon for App url like androidapp://com.patreon.android

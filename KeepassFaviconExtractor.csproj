@@ -133,6 +133,7 @@
     <None Include="native\x86\libsharpyuv.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <EmbeddedResource Include="Assets\FaviconExtractorIcon_small.png" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Networking\" />

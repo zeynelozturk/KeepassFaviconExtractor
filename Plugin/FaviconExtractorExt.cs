@@ -36,6 +36,13 @@ namespace FaviconExtractor
             if (type == PluginMenuType.Main)
             {
                 ToolStripMenuItem root = new ToolStripMenuItem("Favicon Extractor");
+                // set small icon from Assets (if available)
+                Image icon = LoadMenuIcon();
+                if (icon != null)
+                {
+                    root.Image = icon;
+                }
+
                 root.DropDownItems.Add(CreateMenuItem("Extract favicon", OnExtractFaviconClick));
                 root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
                 return root;
@@ -59,6 +66,77 @@ namespace FaviconExtractor
             ToolStripMenuItem item = new ToolStripMenuItem(text);
             item.Click += onClick;
             return item;
+        }
+
+        private Image menuIcon;
+        private Image LoadMenuIcon()
+        {
+            if (menuIcon != null)
+                return menuIcon;
+
+            // Prefer the embedded resource first (if it was packaged into the DLL).
+            const string preferredFileName = "FaviconExtractorIcon_small.png";
+            try
+            {
+                Assembly asm = Assembly.GetExecutingAssembly();
+                string[] resources = asm.GetManifestResourceNames();
+                string match = resources.FirstOrDefault(r => r.EndsWith(preferredFileName, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(match))
+                {
+                    using (Stream rs = asm.GetManifestResourceStream(match))
+                    using (Image img = Image.FromStream(rs))
+                    {
+                        menuIcon = new Bitmap(img, new Size(16, 16));
+                        return menuIcon;
+                    }
+                }
+            }
+            catch
+            {
+                // ignore and fall back to filesystem search
+            }
+
+            // If not embedded, search upward from several likely base directories and look for an Assets folder containing the preferred file.
+            string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+            string[] baseDirs = new[] { assemblyDir, AppDomain.CurrentDomain.BaseDirectory, Directory.GetCurrentDirectory() };
+
+            foreach (string baseDir in baseDirs)
+            {
+                try
+                {
+                    DirectoryInfo dir = new DirectoryInfo(baseDir);
+                    int levels = 0;
+                    while (dir != null && levels < 6)
+                    {
+                        string candidate = Path.Combine(dir.FullName, "Assets", preferredFileName);
+                        if (File.Exists(candidate))
+                        {
+                            try
+                            {
+                                using (FileStream fs = File.OpenRead(candidate))
+                                using (Image img = Image.FromStream(fs))
+                                {
+                                    menuIcon = new Bitmap(img, new Size(16, 16));
+                                    return menuIcon;
+                                }
+                            }
+                            catch
+                            {
+                                // fallthrough to continue searching
+                            }
+                        }
+
+                        dir = dir.Parent;
+                        levels++;
+                    }
+                }
+                catch
+                {
+                    // ignore and try next baseDir
+                }
+            }
+
+            return null;
         }
 
         private async void OnExtractFaviconClick(object sender, EventArgs e)
