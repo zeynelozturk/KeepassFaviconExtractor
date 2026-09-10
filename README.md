@@ -35,6 +35,14 @@ Note that this extension will change the icon of entry without confirmation.
 
 We do not modify or delete previously stored icons.
 
+## Network and privacy behavior
+
+- The plugin makes outbound HTTP/HTTPS requests to the target site's URL to discover icons.
+- If direct discovery fails, it may query external providers (for example Google, DuckDuckGo, Favicone, Vemetric, Favicon.im, and Hunter logo endpoint).
+- Redirects that end on private or loopback addresses can be blocked with `EnforcePrivateAddressBlocking` (default is compatibility-first).
+- Native WEBP loading prefers plugin-local `native/x64` and `native/x86`; legacy broad path fallback is controlled by `AllowLegacyNativeLibrarySearchFallback`.
+- Some response reads use explicit size caps (`MaxHtmlReadBytes`, `MaxPlaceholderHashReadBytes`) to reduce memory-risk from oversized responses.
+
 ## Licensing and Third-Party Notices
 
 - This project is licensed under GPL-3.0. See [LICENSE](LICENSE).

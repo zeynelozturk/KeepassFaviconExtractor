@@ -72,8 +72,10 @@ namespace FaviconExtractor
                             bool isLikelyPlaceholder = false;
                             if (ExternalFaviconServiceDiscoverer.IsPlaceholderProneExternalSource(source) && response.Content != null)
                             {
-                                byte[] responseBytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                                isLikelyPlaceholder = ExternalFaviconServiceDiscoverer.IsLikelyPlaceholder(source, responseBytes);
+                                string sha256Hex = await ExternalFaviconServiceDiscoverer
+                                    .ComputeResponseSha256HexWithLimitAsync(response.Content, FaviconDiscoveryPreferences.MaxPlaceholderHashReadBytes, cancellationToken)
+                                    .ConfigureAwait(false);
+                                isLikelyPlaceholder = ExternalFaviconServiceDiscoverer.IsKnownPlaceholderHash(source, sha256Hex);
                             }
 
                             bool ok = response.IsSuccessStatusCode

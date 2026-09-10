@@ -115,6 +115,12 @@ namespace FaviconExtractor
                         ? response.RequestMessage.RequestUri
                         : probeUri;
 
+                    if (FaviconDiscoveryPreferences.EnforcePrivateAddressBlocking
+                        && await NetworkSafety.IsPrivateOrLoopbackUriAsync(finalUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken).ConfigureAwait(false))
+                    {
+                        return null;
+                    }
+
                     string type = response.Content != null && response.Content.Headers != null && response.Content.Headers.ContentType != null
                         ? response.Content.Headers.ContentType.MediaType
                         : string.Empty;

@@ -34,6 +34,10 @@ namespace FaviconExtractor
         public const int NormalizedIconSize = 128;
         public const bool UpscaleSmallImagesDuringNormalization = false;
         public const int TinySourceUpscaleThreshold = 24;
+        public const bool AllowLegacyNativeLibrarySearchFallback = true;
+        public const int MaxHtmlReadBytes = 256 * 1024;
+        public const int MaxPlaceholderHashReadBytes = 128 * 1024;
+        public const bool EnforcePrivateAddressBlocking = false;
 
         public static readonly IReadOnlyList<string> WellKnownFaviconPaths = new[]
         {

@@ -86,6 +86,12 @@ namespace FaviconExtractor
                         ? response.RequestMessage.RequestUri
                         : requestUri;
 
+                    if (FaviconDiscoveryPreferences.EnforcePrivateAddressBlocking
+                        && await NetworkSafety.IsPrivateOrLoopbackUriAsync(finalUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken).ConfigureAwait(false))
+                    {
+                        return null;
+                    }
+
                     string type = response.Content != null && response.Content.Headers != null && response.Content.Headers.ContentType != null
                         ? response.Content.Headers.ContentType.MediaType
                         : string.Empty;
@@ -100,7 +106,7 @@ namespace FaviconExtractor
                         return null;
                     }
 
-                    if (await IsLikelyPlaceholderResponseAsync(source, response).ConfigureAwait(false))
+                    if (await IsLikelyPlaceholderResponseAsync(source, response, cancellationToken).ConfigureAwait(false))
                     {
                         return null;
                     }
@@ -461,15 +467,56 @@ namespace FaviconExtractor
             return IsKnownPlaceholderHash(source, sha256Hex);
         }
 
-        private static async Task<bool> IsLikelyPlaceholderResponseAsync(string source, HttpResponseMessage response)
+        private static async Task<bool> IsLikelyPlaceholderResponseAsync(string source, HttpResponseMessage response, CancellationToken cancellationToken)
         {
             if (!IsPlaceholderProneExternalSource(source) || response == null || response.Content == null)
             {
                 return false;
             }
 
-            byte[] responseBytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-            return IsLikelyPlaceholder(source, responseBytes);
+            string sha256Hex = await ComputeResponseSha256HexWithLimitAsync(response.Content, FaviconDiscoveryPreferences.MaxPlaceholderHashReadBytes, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(sha256Hex))
+            {
+                return false;
+            }
+
+            return IsKnownPlaceholderHash(source, sha256Hex);
+        }
+
+        internal static async Task<string> ComputeResponseSha256HexWithLimitAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+        {
+            if (content == null || maxBytes <= 0)
+            {
+                return null;
+            }
+
+            using (Stream stream = await content.ReadAsStreamAsync().ConfigureAwait(false))
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] buffer = new byte[8192];
+                int totalRead = 0;
+
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    int read = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    totalRead += read;
+                    if (totalRead > maxBytes)
+                    {
+                        return null;
+                    }
+
+                    sha256.TransformBlock(buffer, 0, read, null, 0);
+                }
+
+                sha256.TransformFinalBlock(new byte[0], 0, 0);
+                return BitConverter.ToString(sha256.Hash).Replace("-", string.Empty).ToLowerInvariant();
+            }
         }
 
         private static string ComputeSha256Hex(byte[] bytes)

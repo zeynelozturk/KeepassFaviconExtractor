@@ -30,6 +30,16 @@ namespace FaviconExtractor
                     throw new InvalidOperationException("Icon response has no content.");
                 }
 
+                Uri finalUri = response.RequestMessage != null && response.RequestMessage.RequestUri != null
+                    ? response.RequestMessage.RequestUri
+                    : iconUri;
+
+                if (FaviconDiscoveryPreferences.EnforcePrivateAddressBlocking
+                    && await NetworkSafety.IsPrivateOrLoopbackUriAsync(finalUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException("Icon response target is a private or loopback address.");
+                }
+
                 if (response.Content.Headers != null && response.Content.Headers.ContentLength.HasValue)
                 {
                     if (response.Content.Headers.ContentLength.Value > FaviconDiscoveryPreferences.MaxIconDownloadBytes)

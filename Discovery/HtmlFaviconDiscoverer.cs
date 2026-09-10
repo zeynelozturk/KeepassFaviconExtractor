@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
@@ -22,15 +24,25 @@ namespace FaviconExtractor
                 throw new InvalidOperationException("The entry URL must be an absolute HTTP/HTTPS URL.");
             }
 
-            HttpResponseMessage response = await HttpClient.GetAsync(pageUri, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            string html;
+            Uri finalPageUri;
+            using (HttpResponseMessage response = await HttpClient.GetAsync(pageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
+            {
+                response.EnsureSuccessStatusCode();
 
-            Uri finalPageUri = response.RequestMessage != null && response.RequestMessage.RequestUri != null
-                ? response.RequestMessage.RequestUri
-                : pageUri;
+                finalPageUri = response.RequestMessage != null && response.RequestMessage.RequestUri != null
+                    ? response.RequestMessage.RequestUri
+                    : pageUri;
 
-            string html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
+                if (FaviconDiscoveryPreferences.EnforcePrivateAddressBlocking
+                    && await NetworkSafety.IsPrivateOrLoopbackUriAsync(finalPageUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException("Final HTML URL resolves to a private or loopback address.");
+                }
+
+                html = await ReadResponseTextWithLimitAsync(response.Content, FaviconDiscoveryPreferences.MaxHtmlReadBytes, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
 
             var document = new HtmlAgilityPack.HtmlDocument();
             document.LoadHtml(html);
@@ -55,6 +67,68 @@ namespace FaviconExtractor
             client.Timeout = FaviconDiscoveryPreferences.HtmlRequestTimeout;
             client.DefaultRequestHeaders.UserAgent.ParseAdd("FaviconExtractor/0.1");
             return client;
+        }
+
+        private static async Task<string> ReadResponseTextWithLimitAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+        {
+            if (content == null)
+            {
+                return string.Empty;
+            }
+
+            if (content.Headers != null && content.Headers.ContentLength.HasValue && content.Headers.ContentLength.Value > maxBytes)
+            {
+                throw new InvalidOperationException("HTML response is larger than configured limit.");
+            }
+
+            using (Stream stream = await content.ReadAsStreamAsync().ConfigureAwait(false))
+            using (MemoryStream buffer = new MemoryStream())
+            {
+                byte[] chunk = new byte[8192];
+                int totalRead = 0;
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    int read = await stream.ReadAsync(chunk, 0, chunk.Length, cancellationToken).ConfigureAwait(false);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    totalRead += read;
+                    if (totalRead > maxBytes)
+                    {
+                        throw new InvalidOperationException("HTML response is larger than configured limit.");
+                    }
+
+                    buffer.Write(chunk, 0, read);
+                }
+
+                Encoding encoding = GetEncoding(content);
+                return encoding.GetString(buffer.ToArray());
+            }
+        }
+
+        private static Encoding GetEncoding(HttpContent content)
+        {
+            string charSet = content != null
+                && content.Headers != null
+                && content.Headers.ContentType != null
+                ? content.Headers.ContentType.CharSet
+                : null;
+
+            if (!string.IsNullOrWhiteSpace(charSet))
+            {
+                try
+                {
+                    return Encoding.GetEncoding(charSet.Trim('"'));
+                }
+                catch
+                {
+                }
+            }
+
+            return Encoding.UTF8;
         }
 
         private static Uri ResolveBaseUri(HtmlAgilityPack.HtmlDocument document, Uri pageUri)

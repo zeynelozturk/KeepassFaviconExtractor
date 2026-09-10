@@ -15,6 +15,7 @@ namespace FaviconExtractor
         private static bool nativeAvailable;
         private static string nativeLoadFailureMessage;
         private static IntPtr nativeModuleHandle;
+        private static string nativeLoadedFromPath;
 
         public static bool LooksLikeWebp(byte[] data)
         {
@@ -76,6 +77,10 @@ namespace FaviconExtractor
             }
 
             lines.Add("webp-native-available=" + avail);
+            if (!string.IsNullOrWhiteSpace(nativeLoadedFromPath))
+            {
+                lines.Add("webp-native-path=" + nativeLoadedFromPath);
+            }
             if (!string.IsNullOrEmpty(nativeLoadFailureMessage))
             {
                 lines.Add("webp-native-failure=" + nativeLoadFailureMessage);
@@ -208,6 +213,7 @@ namespace FaviconExtractor
                 nativeLoadAttempted = true;
                 nativeAvailable = false;
                 nativeLoadFailureMessage = null;
+                nativeLoadedFromPath = null;
                 foreach (string candidatePath in EnumerateNativeLibraryPaths(architectureFolder, "libwebp.dll"))
                 {
                     if (!File.Exists(candidatePath))
@@ -230,6 +236,7 @@ namespace FaviconExtractor
                     {
                         nativeModuleHandle = handle;
                         nativeAvailable = true;
+                        nativeLoadedFromPath = candidatePath;
                         nativeLoadFailureMessage = null;
                         return;
                     }
@@ -250,13 +257,21 @@ namespace FaviconExtractor
             string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
             string assemblyDirectory = Path.GetDirectoryName(typeof(WebpDecoder).Assembly.Location) ?? string.Empty;
 
+            foreach (string path in EnumeratePreferredNativeLibraryPaths(baseDirectory, assemblyDirectory, architectureFolder, fileName))
+            {
+                yield return path;
+            }
+
+            if (!FaviconDiscoveryPreferences.AllowLegacyNativeLibrarySearchFallback)
+            {
+                yield break;
+            }
+
             yield return Path.Combine(baseDirectory, fileName);
-            yield return Path.Combine(baseDirectory, "native", architectureFolder, fileName);
 
             if (!string.Equals(assemblyDirectory, baseDirectory, StringComparison.OrdinalIgnoreCase))
             {
                 yield return Path.Combine(assemblyDirectory, fileName);
-                yield return Path.Combine(assemblyDirectory, "native", architectureFolder, fileName);
             }
 
             foreach (string root in new[] { baseDirectory, assemblyDirectory })
@@ -268,6 +283,22 @@ namespace FaviconExtractor
                     DirectoryInfo parent = Directory.GetParent(current);
                     current = parent != null ? parent.FullName : null;
                 }
+            }
+        }
+
+        private static IEnumerable<string> EnumeratePreferredNativeLibraryPaths(string baseDirectory, string assemblyDirectory, string architectureFolder, string fileName)
+        {
+            if (!string.IsNullOrWhiteSpace(assemblyDirectory))
+            {
+                yield return Path.Combine(assemblyDirectory, "native", architectureFolder, fileName);
+                yield return Path.Combine(assemblyDirectory, fileName);
+            }
+
+            if (!string.IsNullOrWhiteSpace(baseDirectory)
+                && !string.Equals(baseDirectory, assemblyDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return Path.Combine(baseDirectory, "native", architectureFolder, fileName);
+                yield return Path.Combine(baseDirectory, fileName);
             }
         }
 
