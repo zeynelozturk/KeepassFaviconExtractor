@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,11 +24,18 @@ namespace FaviconExtractor
             }
 
             List<Task<FaviconCandidate>> probes = new List<Task<FaviconCandidate>>();
+            Dictionary<string, DnsResolutionState> dnsStateByDomain = new Dictionary<string, DnsResolutionState>(StringComparer.OrdinalIgnoreCase);
             foreach (string domain in GetDomainCandidates(siteUri.DnsSafeHost))
             {
                 bool isExactHost = string.Equals(domain, siteUri.DnsSafeHost, StringComparison.OrdinalIgnoreCase);
+                DnsResolutionState dnsState = await GetDnsResolutionStateAsync(domain, dnsStateByDomain, cancellationToken).ConfigureAwait(false);
                 foreach (string source in ExternalProviderSources)
                 {
+                    if (ShouldSkipProviderForDnsState(source, dnsState))
+                    {
+                        continue;
+                    }
+
                     Uri requestUri = BuildProviderUri(source, domain);
                     probes.Add(ProbeSingleCandidateAsync(requestUri, source, false, isExactHost, cancellationToken));
                 }
@@ -105,13 +114,19 @@ namespace FaviconExtractor
                         score = FaviconScorer.ApplyLogoPenalty(score);
                     }
 
+                    Uri candidateIconUri = GetCandidateIconUri(requestUri, finalUri, source, response);
+                    if (candidateIconUri == null)
+                    {
+                        return null;
+                    }
+
                     return new FaviconCandidate
                     {
                         Source = source,
                         RelAttribute = rel,
                         TypeAttribute = type,
                         SizesAttribute = string.Empty,
-                        IconUri = GetCandidateIconUri(requestUri, finalUri, source),
+                        IconUri = candidateIconUri,
                         BestSize = size,
                         Score = score
                     };
@@ -267,19 +282,141 @@ namespace FaviconExtractor
                 || absolute.Contains("favicon.vemetric.com/");
         }
 
-        private static Uri GetCandidateIconUri(Uri requestUri, Uri finalUri, string source)
+        private static Uri GetCandidateIconUri(Uri requestUri, Uri finalUri, string source, HttpResponseMessage response)
         {
-            if (string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase))
+            if (IsGoogleExternalSource(source))
             {
-                return requestUri;
-            }
+                Uri contentLocation = GetResponseContentLocationUri(response, finalUri);
+                if (contentLocation == null || IsGoogleOwnedHost(contentLocation.Host))
+                {
+                    return null;
+                }
 
-            if (string.Equals(source, "external-google-faviconv2", StringComparison.OrdinalIgnoreCase))
-            {
-                return requestUri;
+                return contentLocation;
             }
 
             return finalUri;
+        }
+
+        private static bool IsGoogleExternalSource(string source)
+        {
+            return string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "external-google-faviconv2", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static Uri GetResponseContentLocationUri(HttpResponseMessage response, Uri fallbackBaseUri)
+        {
+            if (response == null || response.Content == null || response.Content.Headers == null)
+            {
+                return null;
+            }
+
+            Uri contentLocation = response.Content.Headers.ContentLocation;
+            if (contentLocation == null)
+            {
+                return null;
+            }
+
+            if (contentLocation.IsAbsoluteUri)
+            {
+                return contentLocation;
+            }
+
+            if (fallbackBaseUri == null)
+            {
+                return null;
+            }
+
+            return new Uri(fallbackBaseUri, contentLocation);
+        }
+
+        private static bool IsGoogleOwnedHost(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                return true;
+            }
+
+            return host.EndsWith(".google.com", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".gstatic.com", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(host, "google.com", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(host, "gstatic.com", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static async Task<DnsResolutionState> GetDnsResolutionStateAsync(string domain, Dictionary<string, DnsResolutionState> cache, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(domain))
+            {
+                return DnsResolutionState.Unknown;
+            }
+
+            DnsResolutionState cached;
+            if (cache != null && cache.TryGetValue(domain, out cached))
+            {
+                return cached;
+            }
+
+            DnsResolutionState state = await ResolveDnsStateAsync(domain, cancellationToken).ConfigureAwait(false);
+            if (cache != null)
+            {
+                cache[domain] = state;
+            }
+
+            return state;
+        }
+
+        private static async Task<DnsResolutionState> ResolveDnsStateAsync(string domain, CancellationToken cancellationToken)
+        {
+            try
+            {
+                Task<IPAddress[]> resolveTask = Dns.GetHostAddressesAsync(domain);
+                Task timeoutTask = Task.Delay(FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken);
+                Task completed = await Task.WhenAny(resolveTask, timeoutTask).ConfigureAwait(false);
+                if (completed != resolveTask)
+                {
+                    return DnsResolutionState.Unknown;
+                }
+
+                IPAddress[] addresses = await resolveTask.ConfigureAwait(false);
+                return addresses != null && addresses.Length > 0
+                    ? DnsResolutionState.Resolved
+                    : DnsResolutionState.Unresolved;
+            }
+            catch (SocketException ex)
+            {
+                if (ex.SocketErrorCode == SocketError.HostNotFound || ex.SocketErrorCode == SocketError.NoData)
+                {
+                    return DnsResolutionState.Unresolved;
+                }
+
+                return DnsResolutionState.Unknown;
+            }
+            catch (OperationCanceledException)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+
+                return DnsResolutionState.Unknown;
+            }
+            catch
+            {
+                return DnsResolutionState.Unknown;
+            }
+        }
+
+        internal static bool ShouldSkipProviderForDnsState(string source, DnsResolutionState dnsState)
+        {
+            return dnsState == DnsResolutionState.Unresolved
+                && IsPlaceholderProneExternalSource(source);
+        }
+
+        internal static bool IsPlaceholderProneExternalSource(string source)
+        {
+            return string.Equals(source, "external-favicone", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "external-vemetric", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "external-favicon-im", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsUnsupportedContentType(string type)
@@ -314,6 +451,13 @@ namespace FaviconExtractor
             }
 
             return null;
+        }
+
+        internal enum DnsResolutionState
+        {
+            Unknown = 0,
+            Resolved = 1,
+            Unresolved = 2
         }
     }
 }

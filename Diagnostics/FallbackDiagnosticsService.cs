@@ -66,7 +66,9 @@ namespace FaviconExtractor
                                 ? response.Content.Headers.ContentType.MediaType
                                 : string.Empty;
 
-                            bool ok = response.IsSuccessStatusCode && LooksLikeImage(type, finalUri);
+                            bool ok = response.IsSuccessStatusCode
+                                && LooksLikeImage(type, finalUri)
+                                && HasUsableContentLocationForSource(source, response);
                             if (ok)
                             {
                                 successCount++;
@@ -281,6 +283,43 @@ namespace FaviconExtractor
                 || absolute.Contains("icons.duckduckgo.com/ip3/")
                 || absolute.Contains("favicone.com/")
                 || absolute.Contains("favicon.vemetric.com/");
+        }
+
+        private static bool HasUsableContentLocationForSource(string source, HttpResponseMessage response)
+        {
+            if (!IsGoogleExternalSource(source))
+            {
+                return true;
+            }
+
+            Uri contentLocation = response != null
+                && response.Content != null
+                && response.Content.Headers != null
+                ? response.Content.Headers.ContentLocation
+                : null;
+
+            return contentLocation != null
+                && contentLocation.IsAbsoluteUri
+                && !IsGoogleOwnedHost(contentLocation.Host);
+        }
+
+        private static bool IsGoogleExternalSource(string source)
+        {
+            return string.Equals(source, "external-google-s2", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "external-google-faviconv2", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsGoogleOwnedHost(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                return true;
+            }
+
+            return host.EndsWith(".google.com", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".gstatic.com", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(host, "google.com", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(host, "gstatic.com", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

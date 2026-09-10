@@ -548,6 +548,33 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void IsPlaceholderProneExternalSource_RecognizesExpectedProviders()
+        {
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.IsPlaceholderProneExternalSource("external-favicone"));
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.IsPlaceholderProneExternalSource("external-vemetric"));
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.IsPlaceholderProneExternalSource("external-favicon-im"));
+            Assert.IsFalse(ExternalFaviconServiceDiscoverer.IsPlaceholderProneExternalSource("external-google-s2"));
+            Assert.IsFalse(ExternalFaviconServiceDiscoverer.IsPlaceholderProneExternalSource("external-duckduckgo-ip3"));
+        }
+
+        [TestMethod]
+        public void ShouldSkipProviderForDnsState_SkipsOnlyPlaceholderProneWhenUnresolved()
+        {
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.ShouldSkipProviderForDnsState(
+                "external-favicon-im",
+                ExternalFaviconServiceDiscoverer.DnsResolutionState.Unresolved));
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.ShouldSkipProviderForDnsState(
+                "external-vemetric",
+                ExternalFaviconServiceDiscoverer.DnsResolutionState.Unresolved));
+            Assert.IsFalse(ExternalFaviconServiceDiscoverer.ShouldSkipProviderForDnsState(
+                "external-google-faviconv2",
+                ExternalFaviconServiceDiscoverer.DnsResolutionState.Unresolved));
+            Assert.IsFalse(ExternalFaviconServiceDiscoverer.ShouldSkipProviderForDnsState(
+                "external-favicon-im",
+                ExternalFaviconServiceDiscoverer.DnsResolutionState.Unknown));
+        }
+
+        [TestMethod]
         public void ScoreSize_PrefersExact128OverLargerIcon()
         {
             int score128 = FaviconScorer.Score("icon", "image/png", new Size(128, 128));
