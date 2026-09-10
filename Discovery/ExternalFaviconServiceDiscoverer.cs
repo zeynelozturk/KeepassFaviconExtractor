@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -95,6 +96,11 @@ namespace FaviconExtractor
                     }
 
                     if (IsUnsupportedContentType(type))
+                    {
+                        return null;
+                    }
+
+                    if (await IsLikelyPlaceholderResponseAsync(source, response).ConfigureAwait(false))
                     {
                         return null;
                     }
@@ -417,6 +423,62 @@ namespace FaviconExtractor
             return string.Equals(source, "external-favicone", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(source, "external-vemetric", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(source, "external-favicon-im", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static bool IsKnownPlaceholderHash(string source, string sha256Hex)
+        {
+            if (string.IsNullOrWhiteSpace(sha256Hex))
+            {
+                return false;
+            }
+
+            if (string.Equals(source, "external-favicone", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Equals(sha256Hex, "7b4142212706d008a65036f8993385a8371f321c656bdba5b4f3e00e5721dc77", StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (string.Equals(source, "external-vemetric", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Equals(sha256Hex, "2a93c17cbf5e17b98f3edd00ff751cbb91954adbdc3559668b1b78d81df87710", StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (string.Equals(source, "external-favicon-im", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Equals(sha256Hex, "f594faa8f108ab9610dac7541200eadcaf558bd8944dc57e28f411a9a060ea9e", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return false;
+        }
+
+        internal static bool IsLikelyPlaceholder(string source, byte[] responseBytes)
+        {
+            if (!IsPlaceholderProneExternalSource(source) || responseBytes == null || responseBytes.Length == 0)
+            {
+                return false;
+            }
+
+            string sha256Hex = ComputeSha256Hex(responseBytes);
+            return IsKnownPlaceholderHash(source, sha256Hex);
+        }
+
+        private static async Task<bool> IsLikelyPlaceholderResponseAsync(string source, HttpResponseMessage response)
+        {
+            if (!IsPlaceholderProneExternalSource(source) || response == null || response.Content == null)
+            {
+                return false;
+            }
+
+            byte[] responseBytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            return IsLikelyPlaceholder(source, responseBytes);
+        }
+
+        private static string ComputeSha256Hex(byte[] bytes)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] hash = sha256.ComputeHash(bytes);
+                return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+            }
         }
 
         private static bool IsUnsupportedContentType(string type)

@@ -66,9 +66,17 @@ namespace FaviconExtractor
                                 ? response.Content.Headers.ContentType.MediaType
                                 : string.Empty;
 
+                            bool isLikelyPlaceholder = false;
+                            if (ExternalFaviconServiceDiscoverer.IsPlaceholderProneExternalSource(source) && response.Content != null)
+                            {
+                                byte[] responseBytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                                isLikelyPlaceholder = ExternalFaviconServiceDiscoverer.IsLikelyPlaceholder(source, responseBytes);
+                            }
+
                             bool ok = response.IsSuccessStatusCode
                                 && LooksLikeImage(type, finalUri)
-                                && HasUsableContentLocationForSource(source, response);
+                                && HasUsableContentLocationForSource(source, response)
+                                && !isLikelyPlaceholder;
                             if (ok)
                             {
                                 successCount++;
@@ -83,6 +91,7 @@ namespace FaviconExtractor
                                 + " => " + (ok ? "OK" : "FAIL")
                                 + " (status=" + (int)response.StatusCode
                                 + ", type=" + (string.IsNullOrWhiteSpace(type) ? "(none)" : type)
+                                + (isLikelyPlaceholder ? ", placeholder=detected" : string.Empty)
                                 + ", " + sw.ElapsedMilliseconds + "ms)", onLine);
                         }
                     }

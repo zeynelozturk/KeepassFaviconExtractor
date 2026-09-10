@@ -575,6 +575,26 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void IsKnownPlaceholderHash_MatchesConfiguredProviderPlaceholders()
+        {
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.IsKnownPlaceholderHash(
+                "external-favicone",
+                "7b4142212706d008a65036f8993385a8371f321c656bdba5b4f3e00e5721dc77"));
+
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.IsKnownPlaceholderHash(
+                "external-vemetric",
+                "2A93C17CBF5E17B98F3EDD00FF751CBB91954ADBDC3559668B1B78D81DF87710"));
+
+            Assert.IsTrue(ExternalFaviconServiceDiscoverer.IsKnownPlaceholderHash(
+                "external-favicon-im",
+                "f594faa8f108ab9610dac7541200eadcaf558bd8944dc57e28f411a9a060ea9e"));
+
+            Assert.IsFalse(ExternalFaviconServiceDiscoverer.IsKnownPlaceholderHash(
+                "external-google-s2",
+                "f594faa8f108ab9610dac7541200eadcaf558bd8944dc57e28f411a9a060ea9e"));
+        }
+
+        [TestMethod]
         public void ScoreSize_PrefersExact128OverLargerIcon()
         {
             int score128 = FaviconScorer.Score("icon", "image/png", new Size(128, 128));
