@@ -1,20 +1,20 @@
 # KeePass Favicon Extractor
 
-A KeePass 2 plugin that finds, downloads, converts, and caches website favicons. The extension
+A KeePass 2 plugin that finds and downloads website favicons. The extension
 uses multiple discovery methods, therefore it has a higher likelihood of finding a favicon.
 
 ![Favicon Extractor screenshot](Assets/FaviconExtractor_screenshot.webp)
 
 ## Highlights
 
-- Entry (context menu) and main-menu integration in KeePass.
+- Entry right-click and main-menu integration in KeePass.
 - Multi-source favicon discovery with ranked candidate selection: HTML parsing for fetching
 favicon (SVG, PNG, WEBP, ICO supported); fallback to multiple external services including
 Google, DuckDuckGo.
 - 128x128 is the default size. Smaller icons aren't upscaled, but larger icons are downscaled to 128x128.
 - Live extraction status and diagnostics windows.
 - Guard against storing duplicate icons in the KeePass database.
-- Diagnostics window allows you to check if extension (mainly fallbacks) is working properly.
+- Diagnostics window allows you to check if extension is working properly.
 
 ## Installation
 
