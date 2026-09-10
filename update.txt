@@ -1,2 +1,2 @@
-Version=1.0.0.0
-Url=https://github.com/zeynelozturk/KeepassFaviconExtractor/releases/download/v1.0.0.0/KeepassFaviconExtractor-1.0.0.0.zip
+Version=1.0.0.2
+Url=https://github.com/zeynelozturk/KeepassFaviconExtractor/releases/download/v1.0.0.2/KeepassFaviconExtractor-1.0.0.2.zip
