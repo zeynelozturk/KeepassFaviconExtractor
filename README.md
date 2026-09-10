@@ -39,6 +39,7 @@ We do not modify or delete previously stored icons.
 
 - The plugin makes outbound HTTP/HTTPS requests to the target site's URL to discover icons.
 - If direct discovery fails, it may query external providers (for example Google, DuckDuckGo, Favicone, Vemetric, Favicon.im, and Hunter logo endpoint).
+- External providers receive host/domain-based values (host and sometimes parent domain), not the full entry URL path/query.
 - Redirects that end on private or loopback addresses can be blocked with `EnforcePrivateAddressBlocking` (default is compatibility-first).
 - Native WEBP loading prefers plugin-local `native/x64` and `native/x86`; legacy broad path fallback is controlled by `AllowLegacyNativeLibrarySearchFallback`.
 - Some response reads use explicit size caps (`MaxHtmlReadBytes`, `MaxPlaceholderHashReadBytes`) to reduce memory-risk from oversized responses.

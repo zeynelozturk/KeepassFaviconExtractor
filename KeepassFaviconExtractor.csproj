@@ -101,7 +101,8 @@
     <Compile Include="Discovery\HtmlFaviconDiscoverer.cs" />
     <Compile Include="Discovery\HtmlFaviconDiscoveryResult.cs" />
     <Compile Include="Discovery\WellKnownFaviconDiscoverer.cs" />
-    <Compile Include="Diagnostics\\FallbackDiagnosticsService.cs" />`r`n    <Compile Include="Networking\\NetworkSafety.cs" />
+    <Compile Include="Diagnostics\FallbackDiagnosticsService.cs" />
+    <Compile Include="Networking\NetworkSafety.cs" />
     <Compile Include="Plugin\FaviconExtractorExt.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Scoring\FaviconScorer.cs" />

@@ -47,7 +47,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="IconNormalizerTests.cs" />`r`n    <Compile Include="NetworkSafetyTests.cs" />
+    <Compile Include="IconNormalizerTests.cs" />
+    <Compile Include="NetworkSafetyTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\KeepassFaviconExtractor.csproj">

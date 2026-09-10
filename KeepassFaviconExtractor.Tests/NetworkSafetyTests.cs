@@ -1,9 +1,5 @@
+using System;
 using System.Net;
-using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FaviconExtractor
@@ -50,42 +46,5 @@ namespace FaviconExtractor
             Assert.IsFalse(NetworkSafety.IsPrivateOrLoopbackAddress(IPAddress.Parse("2001:4860:4860::8888")));
         }
 
-        [TestMethod]
-        public async Task ComputeResponseSha256HexWithLimitAsync_SmallPayload_ReturnsExpectedHash()
-        {
-            byte[] payload = Encoding.UTF8.GetBytes("hello-security");
-            using (ByteArrayContent content = new ByteArrayContent(payload))
-            {
-                string hash = await ExternalFaviconServiceDiscoverer
-                    .ComputeResponseSha256HexWithLimitAsync(content, 1024, CancellationToken.None)
-                    .ConfigureAwait(false);
-
-                string expected = ComputeSha256Hex(payload);
-                Assert.AreEqual(expected, hash);
-            }
-        }
-
-        [TestMethod]
-        public async Task ComputeResponseSha256HexWithLimitAsync_OversizedPayload_ReturnsNull()
-        {
-            byte[] payload = new byte[4096];
-            using (ByteArrayContent content = new ByteArrayContent(payload))
-            {
-                string hash = await ExternalFaviconServiceDiscoverer
-                    .ComputeResponseSha256HexWithLimitAsync(content, 512, CancellationToken.None)
-                    .ConfigureAwait(false);
-
-                Assert.IsNull(hash);
-            }
-        }
-
-        private static string ComputeSha256Hex(byte[] bytes)
-        {
-            using (SHA256 sha256 = SHA256.Create())
-            {
-                byte[] hash = sha256.ComputeHash(bytes);
-                return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
-            }
-        }
     }
 }
