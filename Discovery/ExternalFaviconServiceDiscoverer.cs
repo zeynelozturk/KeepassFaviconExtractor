@@ -292,7 +292,7 @@ namespace FaviconExtractor
                     return null;
                 }
 
-                return contentLocation;
+                return requestUri;
             }
 
             return finalUri;
