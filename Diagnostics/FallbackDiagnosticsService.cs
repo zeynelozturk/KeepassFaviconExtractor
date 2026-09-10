@@ -30,9 +30,11 @@ namespace FaviconExtractor
         public static async Task<string> RunAsync(CancellationToken cancellationToken, Action<string> onLine)
         {
             StringBuilder sb = new StringBuilder();
-            List<string> failedProbes = new List<string>();
+            List<string> unavailableServices = new List<string>();
             int totalProbes = 0;
             int totalSuccess = 0;
+            int totalServices = 0;
+            int successfulServices = 0;
 
             AppendLine(sb, "External fallback diagnostics", onLine);
             AppendLine(sb, string.Empty, onLine);
@@ -43,6 +45,7 @@ namespace FaviconExtractor
 
             foreach (string source in ExternalFaviconServiceDiscoverer.ExternalProviderSources)
             {
+                totalServices++;
                 int successCount = 0;
 
                 AppendLine(sb, source + ":", onLine);
@@ -82,11 +85,6 @@ namespace FaviconExtractor
                                 successCount++;
                                 totalSuccess++;
                             }
-                            else
-                            {
-                                failedProbes.Add(source + " / " + domain);
-                            }
-
                             AppendLine(sb, "  - " + domain
                                 + " => " + (ok ? "OK" : "FAIL")
                                 + " (status=" + (int)response.StatusCode
@@ -98,7 +96,6 @@ namespace FaviconExtractor
                     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                     {
                         sw.Stop();
-                        failedProbes.Add(source + " / " + domain);
                         AppendLine(sb, "  - " + domain + " => FAIL (timeout/canceled, " + sw.ElapsedMilliseconds + "ms)", onLine);
                     }
                     catch (OperationCanceledException)
@@ -108,27 +105,58 @@ namespace FaviconExtractor
                     catch (Exception ex)
                     {
                         sw.Stop();
-                        failedProbes.Add(source + " / " + domain);
                         AppendLine(sb, "  - " + domain + " => FAIL (" + ex.GetType().Name + ": " + ex.Message + ", " + sw.ElapsedMilliseconds + "ms)", onLine);
                     }
                 }
 
-                AppendLine(sb, "  Summary: " + successCount + "/" + ProbeDomains.Length + " probes succeeded", onLine);
+                bool serviceSuccessful = successCount > 0;
+                if (serviceSuccessful)
+                {
+                    successfulServices++;
+                }
+                else
+                {
+                    unavailableServices.Add(source);
+                }
+
+                AppendLine(sb, "  Summary: " + successCount + "/" + ProbeDomains.Length + " probes succeeded"
+                    + " => " + (serviceSuccessful ? "SUCCESS" : "FAIL"), onLine);
                 AppendLine(sb, string.Empty, onLine);
             }
 
-            AppendLine(sb, "Overall result: " + (failedProbes.Count == 0 ? "SUCCESS" : "FAIL"), onLine);
+            AppendLine(sb, "Overall result: " + GetOverallResultLabel(successfulServices, totalServices), onLine);
             AppendLine(sb, "Overall summary: " + totalSuccess + "/" + totalProbes + " probes succeeded", onLine);
-            if (failedProbes.Count > 0)
+            AppendLine(sb, "Service summary: " + successfulServices + "/" + totalServices + " providers responded to at least one probe", onLine);
+            if (unavailableServices.Count > 0)
             {
-                AppendLine(sb, "Failed probes:", onLine);
-                for (int i = 0; i < failedProbes.Count; i++)
+                AppendLine(sb, "Unavailable providers:", onLine);
+                for (int i = 0; i < unavailableServices.Count; i++)
                 {
-                    AppendLine(sb, "  - " + failedProbes[i], onLine);
+                    AppendLine(sb, "  - " + unavailableServices[i], onLine);
                 }
             }
 
             return sb.ToString();
+        }
+
+        private static string GetOverallResultLabel(int successfulServices, int totalServices)
+        {
+            if (totalServices <= 0)
+            {
+                return "UNKNOWN";
+            }
+
+            if (successfulServices <= 0)
+            {
+                return "FAIL";
+            }
+
+            if (successfulServices >= totalServices)
+            {
+                return "SUCCESS";
+            }
+
+            return "PARTIAL";
         }
 
         private static void AppendWebpDecoderStatus(StringBuilder sb, Action<string> onLine)
