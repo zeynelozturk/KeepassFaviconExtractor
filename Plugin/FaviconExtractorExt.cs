@@ -31,6 +31,11 @@ namespace FaviconExtractor
             return true;
         }
 
+        public override string UpdateUrl
+        {
+            get { return "https://raw.githubusercontent.com/zeynelozturk/KeepassFaviconExtractor/master/update.txt"; }
+        }
+
         public override ToolStripMenuItem GetMenuItem(PluginMenuType type)
         {
             if (type == PluginMenuType.Main)

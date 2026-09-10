@@ -83,6 +83,13 @@ If your runtime KeePass is elsewhere:
 .\scripts\build-release.ps1 -KeePassExePath "C:\Path\To\KeePass\KeePass.exe"
 ```
 
+## KeePass update checking
+
+`update.txt` in the repository root is the stable version-information file used by KeePass.
+`UpdateUrl` points to the raw GitHub URL for that file, so the link stays the same while the file contents are updated for each release.
+
+When publishing a new release, update the version and download URL in `update.txt` together with the GitHub Release asset.
+
 ## Automatic packaging on Release build
 
 Release builds package automatically by default, including Visual Studio UI Release builds.
