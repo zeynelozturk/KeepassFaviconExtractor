@@ -50,7 +50,7 @@ namespace FaviconExtractor
 
             if (type == PluginMenuType.Entry)
             {
-                return CreateMenuItem("Extract favicon", OnExtractFaviconClick);
+                return CreateMenuItem("Extract favicon", OnExtractFaviconClick, LoadMenuIcon());
             }
 
             return null;
@@ -61,9 +61,13 @@ namespace FaviconExtractor
             host = null;
         }
 
-        private ToolStripMenuItem CreateMenuItem(string text, EventHandler onClick)
+        private ToolStripMenuItem CreateMenuItem(string text, EventHandler onClick, Image icon = null)
         {
             ToolStripMenuItem item = new ToolStripMenuItem(text);
+            if (icon != null)
+            {
+                item.Image = icon;
+            }
             item.Click += onClick;
             return item;
         }

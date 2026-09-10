@@ -16,9 +16,8 @@ Padded source images can still look visually small even when technically “good
 If refining further, the best next improvement is: pre-validate top N candidates (download+decode lightweight) before final ranking/assignment. That removes most weirdness at once without breaking fallback behavior.
 
 Next:
-- URLs that do not load assing a weird icon, because one of fallbacks return that. Try https://sigorta.somposigorta.com.tr/
+- Updating multiple entries at once: A menu option for right clicking folders. And also functionality for multiple items right clicked.
 - Optional automatic finding of favicon upon adding new entry.
 - If there is no URL, the plugin can just offer a logo it found depending on the entry's title or other metadata.
 - After finished, add an Options dialog and add a "Show fetch details" checkbox to the Options dialog.
-- Updating multiple entries at once.
 - Extracting icon for App url like androidapp://com.patreon.android
