@@ -1059,16 +1059,15 @@ namespace FaviconExtractor
                 iconPreviewBox.Width = 72;
                 iconPreviewBox.Height = 72;
                 iconPreviewBox.SizeMode = PictureBoxSizeMode.Zoom;
-                // pull the preview slightly upward so it sits a bit higher in the left column
-                iconPreviewBox.Margin = new Padding(0, -6, 0, 0);
+                iconPreviewBox.Margin = new Padding(0);
 
                 iconSizeLabel = new Label();
                 iconSizeLabel.Text = string.Empty;
                 iconSizeLabel.TextAlign = ContentAlignment.MiddleCenter;
                 iconSizeLabel.AutoSize = false;
                 iconSizeLabel.Height = 20;
-                iconSizeLabel.Dock = DockStyle.Top;
-                iconSizeLabel.Margin = new Padding(0, 4, 8, 0);
+                iconSizeLabel.Dock = DockStyle.Fill;
+                iconSizeLabel.Margin = new Padding(0);
 
                 TableLayoutPanel contentPanel = new TableLayoutPanel();
                 contentPanel.Dock = DockStyle.Fill;
@@ -1084,22 +1083,18 @@ namespace FaviconExtractor
                 iconPreviewBox.Anchor = AnchorStyles.None;
                 outputTextBox.Dock = DockStyle.Fill;
 
-                // Left column: icon preview above a centered size label
                 TableLayoutPanel leftPanel = new TableLayoutPanel();
-                leftPanel.RowCount = 2;
+                leftPanel.RowCount = 3;
                 leftPanel.ColumnCount = 1;
-                // make the single column stretch so child controls can be centered
                 leftPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-                leftPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                leftPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 72f));
+                leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20f));
+                leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
                 leftPanel.Dock = DockStyle.Fill;
                 leftPanel.Controls.Add(iconPreviewBox, 0, 0);
                 leftPanel.Controls.Add(iconSizeLabel, 0, 1);
-                // ensure controls are centered inside the cell
                 iconPreviewBox.Anchor = AnchorStyles.None;
-                iconSizeLabel.Anchor = AnchorStyles.None;
-                // make label match preview width to keep centered look
-                iconSizeLabel.Width = iconPreviewBox.Width;
+                iconSizeLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
                 contentPanel.Controls.Add(leftPanel, 0, 0);
                 contentPanel.Controls.Add(outputTextBox, 1, 0);
