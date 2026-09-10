@@ -53,14 +53,14 @@ namespace FaviconExtractor
                     root.Image = icon;
                 }
 
-                root.DropDownItems.Add(CreateMenuItem("Extract favicon", OnExtractFaviconClick));
+                root.DropDownItems.Add(CreateMenuItem("Extract website favicon", OnExtractFaviconClick));
                 root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
                 return root;
             }
 
             if (type == PluginMenuType.Entry)
             {
-                return CreateMenuItem("Extract favicon", OnExtractFaviconClick, LoadMenuIcon());
+                return CreateMenuItem("Extract website favicon", OnExtractFaviconClick, LoadMenuIcon());
             }
 
             return null;
