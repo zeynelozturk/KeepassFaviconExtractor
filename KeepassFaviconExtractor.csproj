@@ -135,12 +135,11 @@
     <None Include="native\x86\libsharpyuv.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Assets\FaviconExtractorIcon_small.png.old" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
     <EmbeddedResource Include="Assets\FaviconExtractorIcon_small.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Networking\" />
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="THIRD-PARTY-NOTICES.txt" />
     <Content Include="update.txt" />
   </ItemGroup>
