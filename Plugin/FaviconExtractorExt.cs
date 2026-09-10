@@ -6,6 +6,7 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -19,6 +20,10 @@ namespace FaviconExtractor
         private IPluginHost host;
         private bool isExtractRunning;
         private CancellationTokenSource extractCancellationTokenSource;
+        private Icon dialogIcon;
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool DestroyIcon(IntPtr handle);
 
         public override bool Initialize(IPluginHost pluginHost)
         {
@@ -161,6 +166,12 @@ namespace FaviconExtractor
             }
 
             ExtractionStatusForm statusForm = new ExtractionStatusForm();
+            Icon windowIcon = GetDialogIcon();
+            if (windowIcon != null)
+            {
+                statusForm.Icon = windowIcon;
+                statusForm.ShowIcon = true;
+            }
             statusForm.PositionNearOwner(host.MainWindow as Form);
             statusForm.AttachCancelAction(() =>
             {
@@ -336,6 +347,13 @@ namespace FaviconExtractor
             }
 
             DiagnosticsProgressForm diagnosticsForm = new DiagnosticsProgressForm();
+            Icon windowIcon = GetDialogIcon();
+            if (windowIcon != null)
+            {
+                diagnosticsForm.Icon = windowIcon;
+                diagnosticsForm.ShowIcon = true;
+            }
+
             diagnosticsForm.PositionNearOwner(host.MainWindow as Form);
             diagnosticsForm.Show(host.MainWindow);
 
@@ -351,6 +369,45 @@ namespace FaviconExtractor
             {
                 diagnosticsForm.MarkFailed(ex.Message);
             }
+        }
+
+        private Icon GetDialogIcon()
+        {
+            if (dialogIcon != null)
+            {
+                return dialogIcon;
+            }
+
+            try
+            {
+                Image image = LoadMenuIcon();
+                if (image == null)
+                {
+                    return null;
+                }
+
+                using (Bitmap bitmap = new Bitmap(image))
+                {
+                    IntPtr hIcon = bitmap.GetHicon();
+                    try
+                    {
+                        using (Icon sourceIcon = Icon.FromHandle(hIcon))
+                        {
+                            dialogIcon = (Icon)sourceIcon.Clone();
+                        }
+                    }
+                    finally
+                    {
+                        DestroyIcon(hIcon);
+                    }
+                }
+            }
+            catch
+            {
+                dialogIcon = null;
+            }
+
+            return dialogIcon;
         }
 
         private async System.Threading.Tasks.Task<AssignmentAttemptResult> TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, Uri pageUri, CancellationToken userCancellationToken, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
