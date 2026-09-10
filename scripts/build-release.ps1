@@ -93,6 +93,18 @@ function Resolve-LocalManagedDependencyClosure {
 		}
 	}
 
+function Copy-ComplianceFiles {
+	param(
+		[string]$DestinationDir,
+		[string]$ProjectLicensePath,
+		[string]$ThirdPartyNoticesPath
+	)
+
+	New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
+	Copy-Item $ProjectLicensePath (Join-Path $DestinationDir 'LICENSE') -Force
+	Copy-Item $ThirdPartyNoticesPath (Join-Path $DestinationDir 'THIRD-PARTY-NOTICES.txt') -Force
+}
+
 	$localDllByName = @{}
 	Get-ChildItem $BuildOutputPath -File -Filter '*.dll' | ForEach-Object {
 		$localDllByName[$_.BaseName] = $_.FullName
@@ -168,6 +180,18 @@ function Remove-PathWithRetry {
 	}
 }
 
+function Copy-ComplianceFiles {
+	param(
+		[string]$DestinationDir,
+		[string]$ProjectLicensePath,
+		[string]$ThirdPartyNoticesPath
+	)
+
+	New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
+	Copy-Item $ProjectLicensePath (Join-Path $DestinationDir 'LICENSE') -Force
+	Copy-Item $ThirdPartyNoticesPath (Join-Path $DestinationDir 'THIRD-PARTY-NOTICES.txt') -Force
+}
+
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..'))
 $projectFile = [IO.Path]::GetFullPath($ProjectPath)
 $outputBase = [IO.Path]::GetFullPath($OutputRoot)
@@ -181,9 +205,19 @@ $assemblyInfoPath = Join-Path $repoRoot 'Properties\AssemblyInfo.cs'
 $assemblyVersion = Get-AssemblyVersionFromAssemblyInfo $assemblyInfoPath
 $projectAssemblyName = Get-ProjectAssemblyName $projectFile
 $dllPackageFolderName = Split-Path $dllOutDir -Leaf
+$projectLicensePath = Join-Path $repoRoot 'LICENSE'
+$thirdPartyNoticesPath = Join-Path $repoRoot 'THIRD-PARTY-NOTICES.txt'
 
 if (-not (Test-Path $projectFile)) {
 	throw "Project file not found: $projectFile"
+}
+
+if (-not (Test-Path $projectLicensePath)) {
+	throw "Project license file not found: $projectLicensePath"
+}
+
+if (-not (Test-Path $thirdPartyNoticesPath)) {
+	throw "Third-party notices file not found: $thirdPartyNoticesPath"
 }
 
 if (-not $SkipBuild) {
@@ -245,6 +279,8 @@ foreach ($file in $runtimeDlls) {
 	Copy-Item $file.FullName (Join-Path $dllOutDir $file.Name)
 }
 
+Copy-ComplianceFiles -DestinationDir $dllOutDir -ProjectLicensePath $projectLicensePath -ThirdPartyNoticesPath $thirdPartyNoticesPath
+
 foreach ($pdb in $runtimePdbs) {
 	Copy-Item $pdb.FullName (Join-Path $symbolsOutDir $pdb.Name)
 }
@@ -266,18 +302,24 @@ $plgxZip = Join-Path $zipOutDir 'FaviconExtractor-plgx.zip'
 $hybridZip = Join-Path $zipOutDir "FaviconExtractor-$Configuration-hybrid.zip"
 
 $dllZipStage = Join-Path $outputBase '_dll-zip-stage'
+$plgxZipStage = Join-Path $outputBase '_plgx-zip-stage'
 $hybridStage = Join-Path $outputBase '_hybrid-stage'
 New-Item -ItemType Directory -Path (Join-Path $dllZipStage $dllPackageFolderName) -Force | Out-Null
+New-Item -ItemType Directory -Path $plgxZipStage -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hybridStage 'dll') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hybridStage 'plgx') -Force | Out-Null
 Copy-Item (Join-Path $dllOutDir '*') (Join-Path $dllZipStage $dllPackageFolderName) -Recurse -Force
+Copy-Item $plgxPath (Join-Path $plgxZipStage 'FaviconExtractor.plgx') -Force
+Copy-ComplianceFiles -DestinationDir $plgxZipStage -ProjectLicensePath $projectLicensePath -ThirdPartyNoticesPath $thirdPartyNoticesPath
 Copy-Item (Join-Path $dllOutDir '*') (Join-Path $hybridStage 'dll') -Recurse -Force
 Copy-Item $plgxPath (Join-Path $hybridStage 'plgx\FaviconExtractor.plgx') -Force
+Copy-ComplianceFiles -DestinationDir $hybridStage -ProjectLicensePath $projectLicensePath -ThirdPartyNoticesPath $thirdPartyNoticesPath
 
 Compress-Archive -Path (Join-Path $dllZipStage '*') -DestinationPath $dllZip -Force
-Compress-Archive -Path $plgxPath -DestinationPath $plgxZip -Force
+Compress-Archive -Path (Join-Path $plgxZipStage '*') -DestinationPath $plgxZip -Force
 Compress-Archive -Path (Join-Path $hybridStage '*') -DestinationPath $hybridZip -Force
 Remove-PathWithRetry $dllZipStage
+Remove-PathWithRetry $plgxZipStage
 Remove-PathWithRetry $hybridStage
 
 Write-Host "DLL package: $dllOutDir"

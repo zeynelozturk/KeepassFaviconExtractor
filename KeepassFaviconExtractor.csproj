@@ -140,6 +140,7 @@
     <Folder Include="Networking\" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="THIRD-PARTY-NOTICES.txt" />
     <Content Include="update.txt" />
   </ItemGroup>
   <Target Name="ValidateKeePassReference" BeforeTargets="ResolveAssemblyReferences">

@@ -35,6 +35,12 @@ Note that this extension will change the icon of entry without confirmation.
 
 We do not modify or delete previously stored icons.
 
+## Licensing and Third-Party Notices
+
+- This project is licensed under GPL-3.0. See [LICENSE](LICENSE).
+- Third-party component notices and license texts are provided in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+- Release ZIP artifacts include both files.
+
 ## Contact
 
 For questions, bug reports, or feature requests, please open an issue on GitHub,
