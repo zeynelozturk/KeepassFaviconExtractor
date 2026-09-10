@@ -39,6 +39,50 @@ function Get-MSBuildPath {
 	throw 'MSBuild.exe not found.'
 }
 
+function Get-AssemblyVersionFromAssemblyInfo {
+	param(
+		[string]$AssemblyInfoPath
+	)
+
+	if (-not (Test-Path $AssemblyInfoPath)) {
+		throw "Assembly info file not found: $AssemblyInfoPath"
+	}
+
+	$content = Get-Content $AssemblyInfoPath -Raw
+	$match = [regex]::Match($content, 'AssemblyVersion\("([^"]+)"\)')
+	if (-not $match.Success) {
+		throw "AssemblyVersion attribute not found in $AssemblyInfoPath"
+	}
+
+	return $match.Groups[1].Value
+}
+
+function Remove-PathWithRetry {
+	param(
+		[string]$Path,
+		[int]$MaxAttempts = 5,
+		[int]$DelayMilliseconds = 300
+	)
+
+	if (-not (Test-Path $Path)) {
+		return
+	}
+
+	for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+		try {
+			Remove-Item $Path -Recurse -Force -ErrorAction Stop
+			return
+		}
+		catch {
+			if ($attempt -eq $MaxAttempts) {
+				throw "Failed to remove '$Path' after $MaxAttempts attempts. $($_.Exception.Message)"
+			}
+
+			Start-Sleep -Milliseconds $DelayMilliseconds
+		}
+	}
+}
+
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..'))
 $projectFile = [IO.Path]::GetFullPath($ProjectPath)
 $outputBase = [IO.Path]::GetFullPath($OutputRoot)
@@ -47,6 +91,10 @@ $dllOutDir = Join-Path $outputBase 'dll\FaviconExtractor'
 $plgxOutDir = Join-Path $outputBase 'plgx'
 $zipOutDir = Join-Path $outputBase 'zip'
 $symbolsOutDir = Join-Path $outputBase 'symbols'
+$packageName = [IO.Path]::GetFileNameWithoutExtension($projectFile)
+$assemblyInfoPath = Join-Path $repoRoot 'Properties\AssemblyInfo.cs'
+$assemblyVersion = Get-AssemblyVersionFromAssemblyInfo $assemblyInfoPath
+$dllPackageFolderName = Split-Path $dllOutDir -Leaf
 
 if (-not (Test-Path $projectFile)) {
 	throw "Project file not found: $projectFile"
@@ -65,7 +113,7 @@ if (-not (Test-Path $buildOutput)) {
 }
 
 if (Test-Path $outputBase) {
-	Remove-Item $outputBase -Recurse -Force
+	Remove-PathWithRetry $outputBase
 }
 
 New-Item -ItemType Directory -Path $dllOutDir -Force | Out-Null
@@ -104,20 +152,24 @@ if (-not (Test-Path $plgxPath)) {
 	throw 'PLGX packaging failed.'
 }
 
-$dllZip = Join-Path $zipOutDir "FaviconExtractor-$Configuration-dll.zip"
+$dllZip = Join-Path $zipOutDir "$packageName-$assemblyVersion.zip"
 $plgxZip = Join-Path $zipOutDir 'FaviconExtractor-plgx.zip'
 $hybridZip = Join-Path $zipOutDir "FaviconExtractor-$Configuration-hybrid.zip"
 
+$dllZipStage = Join-Path $outputBase '_dll-zip-stage'
 $hybridStage = Join-Path $outputBase '_hybrid-stage'
+New-Item -ItemType Directory -Path (Join-Path $dllZipStage $dllPackageFolderName) -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hybridStage 'dll') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hybridStage 'plgx') -Force | Out-Null
+Copy-Item (Join-Path $dllOutDir '*') (Join-Path $dllZipStage $dllPackageFolderName) -Recurse -Force
 Copy-Item (Join-Path $dllOutDir '*') (Join-Path $hybridStage 'dll') -Recurse -Force
 Copy-Item $plgxPath (Join-Path $hybridStage 'plgx\FaviconExtractor.plgx') -Force
 
-Compress-Archive -Path (Join-Path $dllOutDir '*') -DestinationPath $dllZip -Force
+Compress-Archive -Path (Join-Path $dllZipStage '*') -DestinationPath $dllZip -Force
 Compress-Archive -Path $plgxPath -DestinationPath $plgxZip -Force
 Compress-Archive -Path (Join-Path $hybridStage '*') -DestinationPath $hybridZip -Force
-Remove-Item $hybridStage -Recurse -Force
+Remove-PathWithRetry $dllZipStage
+Remove-PathWithRetry $hybridStage
 
 Write-Host "DLL package: $dllOutDir"
 Write-Host "PLGX package: $plgxPath"
