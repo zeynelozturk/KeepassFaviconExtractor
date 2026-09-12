@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("FaviconExtractor")]
+[assembly: AssemblyTitle("Favicon Extractor")]
 [assembly: AssemblyDescription("Finds and assigns website favicons to KeePass entries.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Zeynel Öztürk")]
@@ -29,6 +29,6 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("1.0.0.2")]
-[assembly: AssemblyFileVersion("1.0.0.2")]
+[assembly: AssemblyVersion("1.0.0.3")]
+[assembly: AssemblyFileVersion("1.0.0.3")]
 [assembly: InternalsVisibleTo("KeepassFaviconExtractor.Tests")]
