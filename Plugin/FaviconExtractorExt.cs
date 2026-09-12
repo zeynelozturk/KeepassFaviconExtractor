@@ -238,8 +238,9 @@ namespace FaviconExtractor
                         DialogResult promptResult = dialog.ShowDialog(host.MainWindow);
                         if (promptResult != DialogResult.OK)
                         {
-                            // User cancelled - close status form without error
-                            statusForm.Close();
+                            // User cancelled the prompt
+                            statusForm.AppendLineSafe("Cancelled by user.");
+                            statusForm.MarkCanceled();
                             return;
                         }
                         url = dialog.PromptedUrl;
