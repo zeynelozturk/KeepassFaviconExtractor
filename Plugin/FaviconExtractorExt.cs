@@ -231,11 +231,28 @@ namespace FaviconExtractor
                 string url = selectedEntry.Strings.ReadSafe(PwDefs.UrlField);
                 if (string.IsNullOrWhiteSpace(url))
                 {
-                    statusForm.AppendLineSafe(string.Empty);
-                    statusForm.AppendLineSafe("Extraction failed.");
-                    statusForm.AppendLineSafe("Reason: The selected entry does not have a URL.");
-                    statusForm.MarkFailed();
-                    return;
+                    // Prompt user for URL when entry has none
+                    using (PromptDialog dialog = new PromptDialog())
+                    {
+                        dialog.Icon = GetDialogIcon();
+                        DialogResult promptResult = dialog.ShowDialog(host.MainWindow);
+                        if (promptResult != DialogResult.OK)
+                        {
+                            // User cancelled - close status form without error
+                            statusForm.Close();
+                            return;
+                        }
+                        url = dialog.PromptedUrl;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(url))
+                    {
+                        statusForm.AppendLineSafe(string.Empty);
+                        statusForm.AppendLineSafe("Extraction failed.");
+                        statusForm.AppendLineSafe("Reason: No URL was provided.");
+                        statusForm.MarkFailed();
+                        return;
+                    }
                 }
 
                 CancellationToken cancellationToken = extractCancellationTokenSource.Token;
@@ -1060,6 +1077,94 @@ namespace FaviconExtractor
                     Success = false,
                     FailureReason = failureReason
                 };
+            }
+        }
+
+        private sealed class PromptDialog : Form
+        {
+            private readonly TextBox urlTextBox;
+            public string PromptedUrl { get; private set; }
+
+            public PromptDialog()
+            {
+                Text = "Extract Favicon";
+                Width = 400;
+                Height = 160;
+                StartPosition = FormStartPosition.CenterParent;
+                FormBorderStyle = FormBorderStyle.FixedDialog;
+                MaximizeBox = false;
+                MinimizeBox = false;
+
+                Label promptLabel = new Label
+                {
+                    Text = "The selected entry has no URL. Please provide one:",
+                    AutoSize = true,
+                    Location = new System.Drawing.Point(12, 12)
+                };
+
+                urlTextBox = new TextBox
+                {
+                    Text = "https://example.com",
+                    ForeColor = System.Drawing.SystemColors.GrayText,
+                    Location = new System.Drawing.Point(12, 36),
+                    Width = 360,
+                    Height = 20
+                };
+
+                urlTextBox.GotFocus += (s, e) =>
+                {
+                    if (urlTextBox.Text == "https://example.com" && urlTextBox.ForeColor == System.Drawing.SystemColors.GrayText)
+                    {
+                        urlTextBox.Text = string.Empty;
+                        urlTextBox.ForeColor = System.Drawing.SystemColors.WindowText;
+                    }
+                };
+
+                urlTextBox.LostFocus += (s, e) =>
+                {
+                    if (string.IsNullOrWhiteSpace(urlTextBox.Text))
+                    {
+                        urlTextBox.Text = "https://example.com";
+                        urlTextBox.ForeColor = System.Drawing.SystemColors.GrayText;
+                    }
+                };
+
+                Button okButton = new Button
+                {
+                    Text = "OK",
+                    DialogResult = DialogResult.OK,
+                    Location = new System.Drawing.Point(216, 72),
+                    Width = 75
+                };
+                okButton.Click += (s, e) => OnOkClick();
+
+                Button cancelButton = new Button
+                {
+                    Text = "Cancel",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new System.Drawing.Point(297, 72),
+                    Width = 75
+                };
+
+                Controls.Add(promptLabel);
+                Controls.Add(urlTextBox);
+                Controls.Add(okButton);
+                Controls.Add(cancelButton);
+
+                AcceptButton = okButton;
+                CancelButton = cancelButton;
+            }
+
+            private void OnOkClick()
+            {
+                string input = urlTextBox.Text;
+                if (input == "https://example.com" && urlTextBox.ForeColor == System.Drawing.SystemColors.GrayText)
+                {
+                    input = string.Empty;
+                }
+                PromptedUrl = input;
+                DialogResult = DialogResult.OK;
+                Close();
             }
         }
 
