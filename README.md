@@ -4,6 +4,7 @@ A KeePass 2 plugin that finds and downloads website favicons. The extension
 uses multiple discovery methods, therefore it has a higher likelihood of finding a favicon.
 
 ![Favicon Extractor screenshot](Assets/FaviconExtractor_screenshot.webp)
+![Favicon Extractor screenshot](Assets/FaviconExtractor_screenshot_icon_found.webp)
 
 ## Highlights
 
