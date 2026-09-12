@@ -257,10 +257,37 @@ namespace FaviconExtractor
 
                 CancellationToken cancellationToken = extractCancellationTokenSource.Token;
 
-                statusForm.AppendLineSafe("Searching icon candidates...");
-                HtmlFaviconDiscoveryResult result = await FaviconDiscoveryService
-                    .DiscoverAsync(url, cancellationToken, statusForm.AppendLineSafe)
-                    .ConfigureAwait(true);
+                HtmlFaviconDiscoveryResult result = null;
+
+                // Check if URL is a direct image URL (has image file extension)
+                if (TryGetDirectImageUrl(url, out Uri directImageUri))
+                {
+                    statusForm.AppendLineSafe("Direct image URL detected. Attempting to fetch...");
+                    // Create a single candidate from the direct image URL
+                    FaviconCandidate directCandidate = new FaviconCandidate
+                    {
+                        IconUri = directImageUri,
+                        Source = "Direct URL",
+                        RelAttribute = "icon",
+                        Score = 100 // High score for direct URL
+                    };
+
+                    result = new HtmlFaviconDiscoveryResult
+                    {
+                        PageUri = new Uri(url),
+                        Candidates = new List<FaviconCandidate> { directCandidate },
+                        BestCandidate = directCandidate,
+                        UsedFallback = false
+                    };
+                }
+                else
+                {
+                    // Standard discovery flow
+                    statusForm.AppendLineSafe("Searching icon candidates...");
+                    result = await FaviconDiscoveryService
+                        .DiscoverAsync(url, cancellationToken, statusForm.AppendLineSafe)
+                        .ConfigureAwait(true);
+                }
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -1047,6 +1074,51 @@ namespace FaviconExtractor
                 + ", type='" + mimeType + "'"
                 + ", size=" + size
                 + ", url=" + candidate.IconUri;
+        }
+
+        private bool TryGetDirectImageUrl(string url, out Uri directImageUri)
+        {
+            directImageUri = null;
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    return false;
+                }
+
+                // Create URI to parse the URL
+                Uri uri = new Uri(url);
+                // Get the path without query string
+                string path = uri.AbsolutePath;
+                // Get the filename (last segment after /)
+                string filename = Path.GetFileName(path);
+
+                if (string.IsNullOrWhiteSpace(filename))
+                {
+                    return false;
+                }
+
+                // Check if filename ends with a supported image extension
+                string[] imageExtensions = { ".png", ".webp", ".ico", ".jpg", ".jpeg", ".gif" };
+                string lowerFilename = filename.ToLowerInvariant();
+
+                foreach (string ext in imageExtensions)
+                {
+                    if (lowerFilename.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                    {
+                        directImageUri = uri;
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            catch
+            {
+                // If URL parsing fails, it's not a direct image URL
+                return false;
+            }
         }
 
         private sealed class AssignmentAttemptResult
