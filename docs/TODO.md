@@ -21,3 +21,4 @@ Next:
 - If there is no URL, the plugin can just offer a logo it found depending on the entry's title or other metadata.
 - After finished, add an Options dialog and add a "Show fetch details" checkbox to the Options dialog.
 - Extracting icon for App url like androidapp://com.patreon.android
+- If URL is literally empty, it can ask for an URL to fetch favicon. That can be useful for entries that are not websites, such as mobile apps.
