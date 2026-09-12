@@ -1160,7 +1160,7 @@ namespace FaviconExtractor
             public PromptDialog()
             {
                 Text = "Extract Favicon";
-                Width = 400;
+                Width = 430;
                 Height = 160;
                 StartPosition = FormStartPosition.CenterParent;
                 FormBorderStyle = FormBorderStyle.FixedDialog;
