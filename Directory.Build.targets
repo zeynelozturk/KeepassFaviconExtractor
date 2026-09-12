@@ -42,4 +42,15 @@
 		  Condition="'$(PackagePluginOnBuild)' == 'true' and '$(Configuration)' == 'Release' and '$(MSBuildProjectName)' == 'KeepassFaviconExtractor'">
 	<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\build-release.ps1&quot; -Configuration $(Configuration) -SkipBuild -KeePassExePath &quot;$(KeePassDir)\KeePass.exe&quot;" />
   </Target>
+
+  <Target Name="WarnWhenUpdateTxtVersionDiffersFromAssemblyVersion"
+		  AfterTargets="Build"
+		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor' and '$(Configuration)' == 'Release' and '$(DesignTimeBuild)' != 'true'">
+	<PropertyGroup>
+	  <_UpdateTxtVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\update.txt')), 'FaviconExtractor:([^\r\n]+)').Groups[1].Value)</_UpdateTxtVersion>
+	  <_AssemblyVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Properties\AssemblyInfo.cs')), 'AssemblyVersion\(&quot;([^&quot;]+)&quot;\)').Groups[1].Value)</_AssemblyVersion>
+	</PropertyGroup>
+	<Warning Condition="'$(_UpdateTxtVersion)' != '' and '$(_AssemblyVersion)' != '' and '$(_UpdateTxtVersion)' != '$(_AssemblyVersion)'"
+			 Text="Release reminder: update.txt version '$(_UpdateTxtVersion)' does not match AssemblyVersion '$(_AssemblyVersion)'. Update update.txt before publishing a release." />
+  </Target>
 </Project>
