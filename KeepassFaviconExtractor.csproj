@@ -114,6 +114,7 @@
   <ItemGroup>
     <None Include="AGENTS.md" />
     <None Include="app.config" />
+    <None Include="Assets\FaviconExtractor_screenshot.webp" />
     <None Include="DEVELOPMENT.md" />
     <None Include="Directory.Build.targets" />
     <None Include="native\THIRD-PARTY-NOTICES.txt" />

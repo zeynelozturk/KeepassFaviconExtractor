@@ -25,7 +25,7 @@ The plugin is contained within a directory named `FaviconExtractor`, so it will 
 
 ## Usage
 
-- Right click an entry in KeePass and select "Extract Favicon" from the context menu.
+- Right click an entry in KeePass and select "Extract website favicon" from the context menu.
 - The plugin will attempt to find and download a favicon for the entry's URL,
 convert it to a suitable format. If a favicon is found, it will be assigned to the entry.
 
@@ -34,6 +34,10 @@ convert it to a suitable format. If a favicon is found, it will be assigned to t
 Note that this extension will change the icon of entry without confirmation.
 
 We do not modify or delete previously stored icons.
+
+## Limitations
+
+- Single entry at a time (cannot extract favicons for multiple entries simultaneously)
 
 ## Network and privacy behavior
 
