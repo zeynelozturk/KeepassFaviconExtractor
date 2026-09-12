@@ -1097,7 +1097,7 @@ namespace FaviconExtractor
 
                 Label promptLabel = new Label
                 {
-                    Text = "The selected entry has no URL. Please provide one:",
+                    Text = "The selected entry has no URL. Please provide one to fetch icon:",
                     AutoSize = true,
                     Location = new System.Drawing.Point(12, 12)
                 };
