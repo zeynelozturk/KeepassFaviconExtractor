@@ -1090,23 +1090,14 @@ namespace FaviconExtractor
 
                 // Create URI to parse the URL
                 Uri uri = new Uri(url);
-                // Get the path without query string
-                string path = uri.AbsolutePath;
-                // Get the filename (last segment after /)
-                string filename = Path.GetFileName(path);
+                // Get the absolute URL in lowercase for comparison
+                string absolute = uri.AbsoluteUri.ToLowerInvariant();
 
-                if (string.IsNullOrWhiteSpace(filename))
+                // Check if URL ends with a supported image extension (before query string)
+                // This matches the same extensions defined in FaviconDiscoveryPreferences
+                foreach (string ext in FaviconDiscoveryPreferences.SupportedImageExtensions)
                 {
-                    return false;
-                }
-
-                // Check if filename ends with a supported image extension
-                string[] imageExtensions = { ".png", ".webp", ".ico", ".jpg", ".jpeg", ".gif" };
-                string lowerFilename = filename.ToLowerInvariant();
-
-                foreach (string ext in imageExtensions)
-                {
-                    if (lowerFilename.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                    if (absolute.EndsWith(ext))
                     {
                         directImageUri = uri;
                         return true;

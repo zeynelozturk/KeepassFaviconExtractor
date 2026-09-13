@@ -39,6 +39,17 @@ namespace FaviconExtractor
         public const int MaxPlaceholderHashReadBytes = 128 * 1024;
         public const bool EnforcePrivateAddressBlocking = false;
 
+        public static readonly IReadOnlyList<string> SupportedImageExtensions = new[]
+        {
+            ".ico",
+            ".png",
+            ".svg",
+            ".jpg",
+            ".jpeg",
+            ".webp",
+            ".gif"
+        };
+
         public static readonly IReadOnlyList<string> WellKnownFaviconPaths = new[]
         {
             "/favicon.ico",

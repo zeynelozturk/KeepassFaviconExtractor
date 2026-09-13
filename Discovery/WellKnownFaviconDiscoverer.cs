@@ -189,13 +189,17 @@ namespace FaviconExtractor
             }
 
             string absolute = uri.AbsoluteUri.ToLowerInvariant();
-            return absolute.EndsWith(".ico")
-                || absolute.EndsWith(".png")
-                || absolute.EndsWith(".svg")
-                || absolute.EndsWith(".jpg")
-                || absolute.EndsWith(".jpeg")
-                || absolute.EndsWith(".webp")
-                || absolute.EndsWith(".gif");
+
+            // Check if URL ends with a supported image extension
+            foreach (string ext in FaviconDiscoveryPreferences.SupportedImageExtensions)
+            {
+                if (absolute.EndsWith(ext))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static Size? TryParseSizeFromUri(Uri uri)
