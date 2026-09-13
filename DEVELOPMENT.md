@@ -88,7 +88,7 @@ If your runtime KeePass is elsewhere:
 `update.txt` in the repository root is the stable version-information file used by KeePass.
 `UpdateUrl` points to the raw GitHub URL for that file, so the link stays the same while the file contents are updated for each release.
 
-When publishing a new release, update the version and download URL in `update.txt` together with the GitHub Release asset.
+When publishing a new release, update the version in `update.txt` together with the GitHub Release asset.
 
 ## Automatic packaging on Release build
 
