@@ -54,6 +54,7 @@ namespace FaviconExtractor
                 }
 
                 root.DropDownItems.Add(CreateMenuItem("Extract website favicon", OnExtractFaviconClick));
+                root.DropDownItems.Add(CreateMenuItem("Download missing database favicons", OnDescargarFaviconsFaltantesClick));
                 root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
                 return root;
             }
@@ -218,142 +219,144 @@ namespace FaviconExtractor
 
             try
             {
-                PwEntry selectedEntry = host.MainWindow.GetSelectedEntry(false);
-                if (selectedEntry == null)
+                PwEntry[] entradasSeleccionadas = host.MainWindow.GetSelectedEntries();
+                if (entradasSeleccionadas == null || entradasSeleccionadas.Length == 0)
+                {
+                    PwEntry entradaIndividual = host.MainWindow.GetSelectedEntry(false);
+                    if (entradaIndividual != null)
+                    {
+                        entradasSeleccionadas = new PwEntry[] { entradaIndividual };
+                    }
+                }
+
+                if (entradasSeleccionadas == null || entradasSeleccionadas.Length == 0)
                 {
                     statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Extraction failed.");
-                    statusForm.AppendLineSafe("Reason: Select an entry first.");
+                    statusForm.AppendLineSafe("Reason: Select at least one entry first.");
                     statusForm.MarkFailed();
                     return;
                 }
 
-                string url = selectedEntry.Strings.ReadSafe(PwDefs.UrlField);
-                if (string.IsNullOrWhiteSpace(url))
+                CancellationToken tokenCancelacion = extractCancellationTokenSource.Token;
+
+                if (entradasSeleccionadas.Length == 1)
                 {
-                    // Prompt user for URL when entry has none
-                    using (PromptDialog dialog = new PromptDialog())
+                    PwEntry entradaUnica = entradasSeleccionadas[0];
+                    string urlEntrada = entradaUnica.Strings.ReadSafe(PwDefs.UrlField);
+
+                    if (string.IsNullOrWhiteSpace(urlEntrada))
                     {
-                        dialog.Icon = GetDialogIcon();
-                        DialogResult promptResult = dialog.ShowDialog(host.MainWindow);
-                        if (promptResult != DialogResult.OK)
+                        using (PromptDialog dialog = new PromptDialog())
                         {
-                            // User cancelled the prompt
-                            statusForm.AppendLineSafe("Cancelled by user.");
-                            statusForm.MarkCanceled();
+                            dialog.Icon = GetDialogIcon();
+                            DialogResult promptResult = dialog.ShowDialog(host.MainWindow);
+                            if (promptResult != DialogResult.OK)
+                            {
+                                statusForm.AppendLineSafe("Cancelled by user.");
+                                statusForm.MarkCanceled();
+                                return;
+                            }
+                            urlEntrada = dialog.PromptedUrl;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(urlEntrada))
+                        {
+                            statusForm.AppendLineSafe(string.Empty);
+                            statusForm.AppendLineSafe("Extraction failed.");
+                            statusForm.AppendLineSafe("Reason: No URL was provided.");
+                            statusForm.MarkFailed();
                             return;
                         }
-                        url = dialog.PromptedUrl;
                     }
 
-                    if (string.IsNullOrWhiteSpace(url))
+                    AssignmentAttemptResult resultadoAsignacion = await ProcesarExtraccionEntradaAsync(
+                        entradaUnica,
+                        urlEntrada,
+                        tokenCancelacion,
+                        statusForm.AppendLineSafe).ConfigureAwait(true);
+
+                    tokenCancelacion.ThrowIfCancellationRequested();
+
+                    if (resultadoAsignacion.Success)
                     {
+                        statusForm.SetAssignedIconPreview(resultadoAsignacion.AssignedIconPngBytes);
+                        if (!string.IsNullOrWhiteSpace(resultadoAsignacion.WarningMessage))
+                        {
+                            statusForm.AppendLineSafe("Warning: " + resultadoAsignacion.WarningMessage);
+                        }
+
                         statusForm.AppendLineSafe(string.Empty);
-                        statusForm.AppendLineSafe("Extraction failed.");
-                        statusForm.AppendLineSafe("Reason: No URL was provided.");
-                        statusForm.MarkFailed();
+                        statusForm.AppendLineSafe("Success: icon assigned.");
+                        statusForm.MarkCompletedWithCountdown(3);
                         return;
                     }
-                }
 
-                CancellationToken cancellationToken = extractCancellationTokenSource.Token;
-
-                HtmlFaviconDiscoveryResult result = null;
-
-                // Check if URL is a direct image URL (has image file extension)
-                if (TryGetDirectImageUrl(url, out Uri directImageUri))
-                {
-                    statusForm.AppendLineSafe("Direct image URL detected. Attempting to fetch...");
-                    // Create a single candidate from the direct image URL
-                    FaviconCandidate directCandidate = new FaviconCandidate
-                    {
-                        IconUri = directImageUri,
-                        Source = "Direct URL",
-                        RelAttribute = "icon",
-                        Score = 100 // High score for direct URL
-                    };
-
-                    result = new HtmlFaviconDiscoveryResult
-                    {
-                        PageUri = new Uri(url),
-                        Candidates = new List<FaviconCandidate> { directCandidate },
-                        BestCandidate = directCandidate,
-                        UsedFallback = false
-                    };
-                }
-                else
-                {
-                    // Standard discovery flow
-                    statusForm.AppendLineSafe("Searching icon candidates...");
-                    result = await FaviconDiscoveryService
-                        .DiscoverAsync(url, cancellationToken, statusForm.AppendLineSafe)
-                        .ConfigureAwait(true);
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (result == null || result.Candidates == null || result.Candidates.Count == 0)
-                {
                     statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Extraction failed.");
-                    if (result != null && !string.IsNullOrWhiteSpace(result.DiscoveryNote))
+                    if (!string.IsNullOrWhiteSpace(resultadoAsignacion.FailureReason))
                     {
-                        statusForm.AppendLineSafe("Reason: " + result.DiscoveryNote);
+                        statusForm.AppendLineSafe("Reason: " + resultadoAsignacion.FailureReason);
+                    }
+
+                    statusForm.MarkFailed();
+                    return;
+                }
+
+                int totalEntradas = entradasSeleccionadas.Length;
+                int totalAsignadas = 0;
+                int totalOmitidas = 0;
+                int totalFallidas = 0;
+
+                statusForm.AppendLineSafe(string.Format("Processing {0} selected entries...", totalEntradas));
+                statusForm.AppendLineSafe(string.Empty);
+
+                for (int indice = 0; indice < totalEntradas; indice++)
+                {
+                    tokenCancelacion.ThrowIfCancellationRequested();
+
+                    PwEntry entradaActual = entradasSeleccionadas[indice];
+                    string tituloEntrada = entradaActual.Strings.ReadSafe(PwDefs.TitleField);
+                    string urlEntrada = entradaActual.Strings.ReadSafe(PwDefs.UrlField);
+
+                    if (string.IsNullOrWhiteSpace(urlEntrada))
+                    {
+                        totalOmitidas++;
+                        statusForm.AppendLineSafe(string.Format("[{0}/{1}] '{2}': Skipped (no URL configured).", indice + 1, totalEntradas, tituloEntrada));
+                        statusForm.AppendLineSafe(string.Empty);
+                        continue;
+                    }
+
+                    statusForm.AppendLineSafe(string.Format("[{0}/{1}] Extracting favicon for '{2}' ({3})...", indice + 1, totalEntradas, tituloEntrada, urlEntrada));
+
+                    AssignmentAttemptResult resultadoLote = await ProcesarExtraccionEntradaAsync(
+                        entradaActual,
+                        urlEntrada,
+                        tokenCancelacion,
+                        mensaje => statusForm.AppendLineSafe("  -> " + mensaje)).ConfigureAwait(true);
+
+                    if (resultadoLote.Success)
+                    {
+                        totalAsignadas++;
+                        statusForm.SetAssignedIconPreview(resultadoLote.AssignedIconPngBytes);
+                        statusForm.AppendLineSafe(string.Format("  -> Success: Icon assigned to '{0}'.", tituloEntrada));
                     }
                     else
                     {
-                        statusForm.AppendLineSafe("Reason: No usable icon candidates were found.");
+                        totalFallidas++;
+                        statusForm.AppendLineSafe(string.Format("  -> Error: {0}", resultadoLote.FailureReason));
                     }
 
-                    statusForm.MarkFailed();
-                    return;
-                }
-
-                statusForm.AppendLineSafe("Downloading and assigning icon...");
-                AssignmentAttemptResult assignmentResult;
-                using (CancellationTokenSource assignmentTimeoutCts = new CancellationTokenSource(FaviconDiscoveryPreferences.AssignmentTimeout))
-                using (CancellationTokenSource assignmentCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, assignmentTimeoutCts.Token))
-                {
-                    try
-                    {
-                        assignmentResult = await TryAssignCandidatesToEntryAsync(
-                            selectedEntry,
-                            result.Candidates,
-                            result.PageUri,
-                            cancellationToken,
-                            assignmentCts.Token,
-                            new StringBuilder(),
-                            statusForm.AppendLineSafe).ConfigureAwait(true);
-                    }
-                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                    {
-                        assignmentResult = AssignmentAttemptResult.Fail("Timed out while downloading/assigning icon.");
-                    }
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (assignmentResult.Success)
-                {
-                    statusForm.SetAssignedIconPreview(assignmentResult.AssignedIconPngBytes);
-                    if (!string.IsNullOrWhiteSpace(assignmentResult.WarningMessage))
-                    {
-                        statusForm.AppendLineSafe("Warning: " + assignmentResult.WarningMessage);
-                    }
                     statusForm.AppendLineSafe(string.Empty);
-                    statusForm.AppendLineSafe("Success: icon assigned.");
-                    statusForm.MarkCompletedWithCountdown(3);
-                    return;
                 }
 
-                statusForm.AppendLineSafe(string.Empty);
-                statusForm.AppendLineSafe("Extraction failed.");
-                if (!string.IsNullOrWhiteSpace(assignmentResult.FailureReason))
-                {
-                    statusForm.AppendLineSafe("Reason: " + assignmentResult.FailureReason);
-                }
+                RefreshEntryListIcons(null);
 
-                statusForm.MarkFailed();
+                statusForm.AppendLineSafe("========================================");
+                statusForm.AppendLineSafe(string.Format("Extraction finished: {0} assigned, {1} failed, {2} skipped.", totalAsignadas, totalFallidas, totalOmitidas));
+                statusForm.AppendLineSafe("========================================");
+
+                statusForm.MarkCompletedWithCountdown(5);
             }
             catch (OperationCanceledException)
             {
@@ -377,6 +380,345 @@ namespace FaviconExtractor
 
                 isExtractRunning = false;
             }
+        }
+
+        private async void OnDescargarFaviconsFaltantesClick(object sender, EventArgs e)
+        {
+            if (host == null || host.MainWindow == null)
+            {
+                return;
+            }
+
+            if (host.Database == null || !host.Database.IsOpen)
+            {
+                MessageBox.Show(
+                    "No database is currently open in KeePass.",
+                    "Favicon Extractor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (isExtractRunning)
+            {
+                MessageBox.Show(
+                    "An extraction process is already running.",
+                    "Favicon Extractor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            var todasLasEntradas = host.Database.RootGroup.GetEntries(true);
+            List<PwEntry> entradasFiltradas = new List<PwEntry>();
+
+            foreach (PwEntry entrada in todasLasEntradas)
+            {
+                if (entrada == null)
+                {
+                    continue;
+                }
+
+                bool sinIconoPersonalizado = entrada.CustomIconUuid == null || entrada.CustomIconUuid.IsZero;
+                if (!sinIconoPersonalizado)
+                {
+                    continue;
+                }
+
+                string urlEntrada = entrada.Strings.ReadSafe(PwDefs.UrlField);
+                if (EsUrlPublicaHttpsValida(urlEntrada, out _))
+                {
+                    entradasFiltradas.Add(entrada);
+                }
+            }
+
+            if (entradasFiltradas.Count == 0)
+            {
+                MessageBox.Show(
+                    "No entries without favicons and valid public HTTPS URLs were found.",
+                    "Favicon Extractor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            string mensajeConfirmacion = string.Format(
+                "Found {0} entries without custom favicons and with valid HTTPS URLs (excluding intranets and local IPs).\n\nDo you want to start downloading missing favicons?",
+                entradasFiltradas.Count);
+
+            DialogResult respuesta = MessageBox.Show(
+                mensajeConfirmacion,
+                "Favicon Extractor - Bulk Download",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (respuesta != DialogResult.Yes)
+            {
+                return;
+            }
+
+            ExtractionStatusForm statusForm = new ExtractionStatusForm();
+            Icon iconoVentana = GetDialogIcon();
+            if (iconoVentana != null)
+            {
+                statusForm.Icon = iconoVentana;
+                statusForm.ShowIcon = true;
+            }
+            statusForm.PositionNearOwner(host.MainWindow as Form);
+
+            statusForm.AttachCancelAction(() =>
+            {
+                CancellationTokenSource cts = extractCancellationTokenSource;
+                if (cts != null && !cts.IsCancellationRequested)
+                {
+                    cts.Cancel();
+                }
+            });
+
+            statusForm.Show(host.MainWindow);
+
+            await EjecutarDescargaMasivaFaviconsAsync(entradasFiltradas, statusForm).ConfigureAwait(true);
+        }
+
+        private async System.Threading.Tasks.Task EjecutarDescargaMasivaFaviconsAsync(
+            List<PwEntry> listaEntradas,
+            ExtractionStatusForm statusForm)
+        {
+            if (statusForm == null || statusForm.IsDisposed || host == null || host.MainWindow == null)
+            {
+                return;
+            }
+
+            if (isExtractRunning)
+            {
+                return;
+            }
+
+            isExtractRunning = true;
+            extractCancellationTokenSource = new CancellationTokenSource();
+            statusForm.BeginProgress();
+
+            int totalEntradas = listaEntradas.Count;
+            int totalAsignados = 0;
+            int totalFallidos = 0;
+
+            statusForm.AppendLineSafe(string.Format("Starting bulk download for {0} entries...", totalEntradas));
+            statusForm.AppendLineSafe(string.Empty);
+
+            CancellationToken tokenCancelacion = extractCancellationTokenSource.Token;
+
+            try
+            {
+                for (int i = 0; i < totalEntradas; i++)
+                {
+                    tokenCancelacion.ThrowIfCancellationRequested();
+
+                    PwEntry entradaActual = listaEntradas[i];
+                    string tituloEntrada = entradaActual.Strings.ReadSafe(PwDefs.TitleField);
+                    string urlEntrada = entradaActual.Strings.ReadSafe(PwDefs.UrlField);
+
+                    statusForm.AppendLineSafe(string.Format("[{0}/{1}] Processing '{2}' ({3})...", i + 1, totalEntradas, tituloEntrada, urlEntrada));
+
+                    AssignmentAttemptResult resultadoAsignacion = await ProcesarExtraccionEntradaAsync(
+                        entradaActual,
+                        urlEntrada,
+                        tokenCancelacion,
+                        msg => statusForm.AppendLineSafe("  -> " + msg)).ConfigureAwait(true);
+
+                    if (resultadoAsignacion.Success)
+                    {
+                        totalAsignados++;
+                        statusForm.SetAssignedIconPreview(resultadoAsignacion.AssignedIconPngBytes);
+                        statusForm.AppendLineSafe(string.Format("  -> Success: Icon assigned to '{0}'.", tituloEntrada));
+                    }
+                    else
+                    {
+                        totalFallidos++;
+                        statusForm.AppendLineSafe(string.Format("  -> Error on '{0}': {1}", tituloEntrada, resultadoAsignacion.FailureReason));
+                    }
+
+                    statusForm.AppendLineSafe(string.Empty);
+                }
+
+                RefreshEntryListIcons(null);
+
+                statusForm.AppendLineSafe("========================================");
+                statusForm.AppendLineSafe(string.Format("Bulk download completed: {0} assigned, {1} failed.", totalAsignados, totalFallidos));
+                statusForm.AppendLineSafe("========================================");
+
+                statusForm.MarkCompletedWithCountdown(5);
+            }
+            catch (OperationCanceledException)
+            {
+                RefreshEntryListIcons(null);
+                statusForm.AppendLineSafe(string.Empty);
+                statusForm.AppendLineSafe("Bulk download cancelled by user.");
+                statusForm.AppendLineSafe(string.Format("Progress: {0} favicons assigned.", totalAsignados));
+                statusForm.MarkCanceled();
+            }
+            catch (Exception ex)
+            {
+                RefreshEntryListIcons(null);
+                statusForm.AppendLineSafe(string.Empty);
+                statusForm.AppendLineSafe("An unexpected error occurred during bulk download: " + ex.Message);
+                statusForm.MarkFailed();
+            }
+            finally
+            {
+                if (extractCancellationTokenSource != null)
+                {
+                    extractCancellationTokenSource.Dispose();
+                    extractCancellationTokenSource = null;
+                }
+
+                isExtractRunning = false;
+            }
+        }
+
+        private async System.Threading.Tasks.Task<AssignmentAttemptResult> ProcesarExtraccionEntradaAsync(
+            PwEntry entradaObjetivo,
+            string urlEntrada,
+            CancellationToken tokenCancelacion,
+            Action<string> registrarProgreso)
+        {
+            if (entradaObjetivo == null)
+            {
+                return AssignmentAttemptResult.Fail("The target entry is null.");
+            }
+
+            if (string.IsNullOrWhiteSpace(urlEntrada))
+            {
+                return AssignmentAttemptResult.Fail("No URL was provided.");
+            }
+
+            HtmlFaviconDiscoveryResult resultadoBusqueda = null;
+
+            if (TryGetDirectImageUrl(urlEntrada, out Uri uriImagenDirecta))
+            {
+                registrarProgreso?.Invoke("Direct image URL detected.");
+
+                FaviconCandidate candidatoDirecto = new FaviconCandidate
+                {
+                    IconUri = uriImagenDirecta,
+                    Source = "Direct URL",
+                    RelAttribute = "icon",
+                    Score = 100
+                };
+
+                resultadoBusqueda = new HtmlFaviconDiscoveryResult
+                {
+                    PageUri = new Uri(urlEntrada),
+                    Candidates = new List<FaviconCandidate> { candidatoDirecto },
+                    BestCandidate = candidatoDirecto,
+                    UsedFallback = false
+                };
+            }
+            else
+            {
+                registrarProgreso?.Invoke("Searching icon candidates...");
+
+                resultadoBusqueda = await FaviconDiscoveryService
+                    .DiscoverAsync(urlEntrada, tokenCancelacion, registrarProgreso)
+                    .ConfigureAwait(true);
+            }
+
+            tokenCancelacion.ThrowIfCancellationRequested();
+
+            if (resultadoBusqueda == null || resultadoBusqueda.Candidates == null || resultadoBusqueda.Candidates.Count == 0)
+            {
+                string razonFallo = "No usable icon candidates were found.";
+                if (resultadoBusqueda != null && !string.IsNullOrWhiteSpace(resultadoBusqueda.DiscoveryNote))
+                {
+                    razonFallo = resultadoBusqueda.DiscoveryNote;
+                }
+
+                return AssignmentAttemptResult.Fail(razonFallo);
+            }
+
+            registrarProgreso?.Invoke("Downloading and assigning icon...");
+
+            using (CancellationTokenSource tiempoEsperaCts = new CancellationTokenSource(FaviconDiscoveryPreferences.AssignmentTimeout))
+            using (CancellationTokenSource ctsCombinado = CancellationTokenSource.CreateLinkedTokenSource(tokenCancelacion, tiempoEsperaCts.Token))
+            {
+                try
+                {
+                    return await TryAssignCandidatesToEntryAsync(
+                        entradaObjetivo,
+                        resultadoBusqueda.Candidates,
+                        resultadoBusqueda.PageUri,
+                        tokenCancelacion,
+                        ctsCombinado.Token,
+                        new StringBuilder(),
+                        registrarProgreso).ConfigureAwait(true);
+                }
+                catch (OperationCanceledException) when (!tokenCancelacion.IsCancellationRequested)
+                {
+                    return AssignmentAttemptResult.Fail("Timed out while downloading/assigning icon.");
+                }
+            }
+        }
+
+        private static bool EsUrlPublicaHttpsValida(string textoUrl, out Uri uriResultado)
+        {
+            uriResultado = null;
+
+            if (string.IsNullOrWhiteSpace(textoUrl))
+            {
+                return false;
+            }
+
+            string urlLimpia = textoUrl.Trim();
+
+            if (!Uri.TryCreate(urlLimpia, UriKind.Absolute, out Uri uri))
+            {
+                return false;
+            }
+
+            if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (uri.IsLoopback)
+            {
+                return false;
+            }
+
+            string hostName = uri.Host;
+            if (string.IsNullOrWhiteSpace(hostName))
+            {
+                return false;
+            }
+
+            if (System.Net.IPAddress.TryParse(hostName, out System.Net.IPAddress direccionIp))
+            {
+                if (NetworkSafety.IsPrivateOrLoopbackAddress(direccionIp))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                if (!hostName.Contains("."))
+                {
+                    return false;
+                }
+
+                string[] extensionesLocales = new string[] {
+                    ".local", ".localhost", ".lan", ".internal", ".corp", ".home", ".domain", ".intranet", ".localdomain"
+                };
+
+                for (int i = 0; i < extensionesLocales.Length; i++)
+                {
+                    if (hostName.EndsWith(extensionesLocales[i], StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            uriResultado = uri;
+            return true;
         }
 
         private async void OnDiagnosticsMenuItemClick(object sender, EventArgs e)
@@ -1007,7 +1349,7 @@ namespace FaviconExtractor
                     null,
                     new[] { typeof(PwEntry), typeof(bool), typeof(bool), typeof(bool), typeof(bool) },
                     null);
-                if (selectEntry != null)
+                if (selectEntry != null && selectedEntry != null)
                 {
                     selectEntry.Invoke(mainWindow, new object[] { selectedEntry, true, false, true, true });
                 }
