@@ -21,6 +21,9 @@ namespace FaviconExtractor
         private bool isExtractRunning;
         private CancellationTokenSource extractCancellationTokenSource;
         private Icon dialogIcon;
+        private readonly object extractRunSync = new object();
+        private ExtractionStatusForm activeExtractionStatusForm;
+        private volatile bool isShuttingDown;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern bool DestroyIcon(IntPtr handle);
@@ -32,6 +35,7 @@ namespace FaviconExtractor
                 return false;
             }
 
+            isShuttingDown = false;
             host = pluginHost;
             return true;
         }
@@ -69,7 +73,66 @@ namespace FaviconExtractor
 
         public override void Terminate()
         {
+            isShuttingDown = true;
+            RequestExtractionCancel();
+
+            ExtractionStatusForm statusForm = null;
+            lock (extractRunSync)
+            {
+                statusForm = activeExtractionStatusForm;
+            }
+
+            CloseStatusFormSafe(statusForm);
             host = null;
+        }
+
+        private void RequestExtractionCancel()
+        {
+            CancellationTokenSource cts = null;
+            lock (extractRunSync)
+            {
+                cts = extractCancellationTokenSource;
+            }
+
+            if (cts != null && !cts.IsCancellationRequested)
+            {
+                cts.Cancel();
+            }
+        }
+
+        private void RegisterActiveStatusForm(ExtractionStatusForm statusForm)
+        {
+            lock (extractRunSync)
+            {
+                activeExtractionStatusForm = statusForm;
+            }
+        }
+
+        private void UnregisterActiveStatusForm(ExtractionStatusForm statusForm)
+        {
+            lock (extractRunSync)
+            {
+                if (ReferenceEquals(activeExtractionStatusForm, statusForm))
+                {
+                    activeExtractionStatusForm = null;
+                }
+            }
+        }
+
+        private static void CloseStatusFormSafe(Form form)
+        {
+            if (form == null || form.IsDisposed)
+            {
+                return;
+            }
+
+            if (form.InvokeRequired)
+            {
+                form.BeginInvoke(new Action<Form>(CloseStatusFormSafe), form);
+                return;
+            }
+
+            form.Close();
         }
 
         private ToolStripMenuItem CreateMenuItem(string text, EventHandler onClick, Image icon = null)
@@ -166,6 +229,11 @@ namespace FaviconExtractor
                 return;
             }
 
+            if (isShuttingDown)
+            {
+                return;
+            }
+
             ExtractionStatusForm statusForm = new ExtractionStatusForm();
             Icon windowIcon = GetDialogIcon();
             if (windowIcon != null)
@@ -176,11 +244,7 @@ namespace FaviconExtractor
             statusForm.PositionNearOwner(host.MainWindow as Form);
             statusForm.AttachCancelAction(() =>
             {
-                CancellationTokenSource cts = extractCancellationTokenSource;
-                if (cts != null && !cts.IsCancellationRequested)
-                {
-                    cts.Cancel();
-                }
+                RequestExtractionCancel();
             });
             statusForm.AttachRetryAction(() =>
             {
@@ -191,6 +255,7 @@ namespace FaviconExtractor
 
                 _ = RunExtractFaviconWorkflowAsync(statusForm);
             });
+            RegisterActiveStatusForm(statusForm);
             statusForm.Show(host.MainWindow);
 
             await RunExtractFaviconWorkflowAsync(statusForm).ConfigureAwait(true);
@@ -308,6 +373,7 @@ namespace FaviconExtractor
                 }
 
                 isExtractRunning = false;
+                UnregisterActiveStatusForm(statusForm);
             }
         }
 
@@ -323,6 +389,11 @@ namespace FaviconExtractor
                 return;
             }
 
+            if (isShuttingDown)
+            {
+                return;
+            }
+
             ExtractionStatusForm statusForm = new ExtractionStatusForm();
             Icon windowIcon = GetDialogIcon();
             if (windowIcon != null)
@@ -334,12 +405,18 @@ namespace FaviconExtractor
             statusForm.PositionNearOwner(host.MainWindow as Form);
             statusForm.AttachCancelAction(() =>
             {
-                CancellationTokenSource cts = extractCancellationTokenSource;
-                if (cts != null && !cts.IsCancellationRequested)
-                {
-                    cts.Cancel();
-                }
+                RequestExtractionCancel();
             });
+            statusForm.AttachRetryAction(() =>
+            {
+                if (isExtractRunning || isShuttingDown)
+                {
+                    return;
+                }
+
+                _ = RunBulkDownloadMissingFaviconsWorkflowAsync(statusForm);
+            });
+            RegisterActiveStatusForm(statusForm);
             statusForm.Show(host.MainWindow);
 
             await RunBulkDownloadMissingFaviconsWorkflowAsync(statusForm).ConfigureAwait(true);
@@ -380,13 +457,22 @@ namespace FaviconExtractor
                     return;
                 }
 
+                PwDatabase runDatabase = host.Database;
                 CancellationToken cancellationToken = extractCancellationTokenSource.Token;
-                var allEntries = host.Database.RootGroup.GetEntries(true);
+
+                if (!TryValidateBulkRunContext(runDatabase, out string contextReason))
+                {
+                    statusForm.AppendLineSafe("Extraction failed.");
+                    statusForm.AppendLineSafe("Reason: " + contextReason);
+                    statusForm.MarkFailed();
+                    return;
+                }
+
+                var allEntries = runDatabase.RootGroup.GetEntries(true);
                 List<PwEntry> keyIconEntriesToProcess = new List<PwEntry>();
                 List<PwEntry> anyBuiltInEntriesToProcess = new List<PwEntry>();
                 int skippedWithCustomIcon = 0;
                 int skippedNoOrInvalidUrl = 0;
-                int skippedPrivateOrLoopback = 0;
 
                 foreach (PwEntry entry in allEntries)
                 {
@@ -405,15 +491,9 @@ namespace FaviconExtractor
                     }
 
                     string entryUrl = entry.Strings.ReadSafe(PwDefs.UrlField);
-                    if (!TryGetPublicHttpsUri(entryUrl, out Uri parsedUri))
+                    if (!TryGetPublicHttpsUri(entryUrl, out _))
                     {
                         skippedNoOrInvalidUrl++;
-                        continue;
-                    }
-
-                    if (await NetworkSafety.IsPrivateOrLoopbackUriAsync(parsedUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken).ConfigureAwait(true))
-                    {
-                        skippedPrivateOrLoopback++;
                         continue;
                     }
 
@@ -428,7 +508,7 @@ namespace FaviconExtractor
                 {
                     statusForm.AppendLineSafe("Extraction failed.");
                     statusForm.AppendLineSafe("Reason: No entries without custom icons and with public HTTPS URLs were found.");
-                    statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} without valid HTTPS URL, {2} with private/loopback endpoint.", skippedWithCustomIcon, skippedNoOrInvalidUrl, skippedPrivateOrLoopback));
+                    statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} without valid HTTPS URL.", skippedWithCustomIcon, skippedNoOrInvalidUrl));
                     statusForm.MarkFailed();
                     return;
                 }
@@ -473,12 +553,22 @@ namespace FaviconExtractor
 
                 statusForm.AppendLineSafe("Mode: " + (replaceAnyKeePassBasedIcons ? "Replace any KeePass based icons" : "Replace key icons only"));
                 statusForm.AppendLineSafe(string.Format("Found {0} eligible entries.", entriesToProcess.Count));
-                statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} with non-default built-in icon, {2} without valid HTTPS URL, {3} with private/loopback endpoint.", skippedWithCustomIcon, skippedWithNonDefaultIcon, skippedNoOrInvalidUrl, skippedPrivateOrLoopback));
+                statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} with non-default built-in icon, {2} without valid HTTPS URL.", skippedWithCustomIcon, skippedWithNonDefaultIcon, skippedNoOrInvalidUrl));
+                statusForm.AppendLineSafe("Safety: private/loopback or unresolved targets are blocked during icon fetch.");
                 statusForm.AppendLineSafe(string.Empty);
 
                 for (int i = 0; i < entriesToProcess.Count; i++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
+                    if (!TryValidateBulkRunContext(runDatabase, out string runningContextReason))
+                    {
+                        statusForm.AppendLineSafe(string.Empty);
+                        statusForm.AppendLineSafe("Bulk download stopped.");
+                        statusForm.AppendLineSafe("Reason: " + runningContextReason);
+                        statusForm.MarkFailed();
+                        return;
+                    }
 
                     PwEntry currentEntry = entriesToProcess[i];
                     string entryTitle = currentEntry.Strings.ReadSafe(PwDefs.TitleField);
@@ -490,7 +580,10 @@ namespace FaviconExtractor
                         currentEntry,
                         entryUrl,
                         cancellationToken,
-                        message => statusForm.AppendLineSafe("  -> " + message)).ConfigureAwait(true);
+                        message => statusForm.AppendLineSafe("  -> " + message),
+                        runDatabase,
+                        true,
+                        true).ConfigureAwait(true);
 
                     if (assignmentResult.Success)
                     {
@@ -559,6 +652,7 @@ namespace FaviconExtractor
                 }
 
                 isExtractRunning = false;
+                UnregisterActiveStatusForm(statusForm);
             }
         }
 
@@ -566,7 +660,10 @@ namespace FaviconExtractor
             PwEntry targetEntry,
             string entryUrl,
             CancellationToken cancellationToken,
-            Action<string> onStatus)
+            Action<string> onStatus,
+            PwDatabase expectedDatabase = null,
+            bool suppressEntrySelectionRefresh = false,
+            bool enforceStrictNetworkSafety = false)
         {
             if (targetEntry == null)
             {
@@ -635,13 +732,48 @@ namespace FaviconExtractor
                         cancellationToken,
                         assignmentCts.Token,
                         new StringBuilder(),
-                        onStatus).ConfigureAwait(true);
+                        onStatus,
+                        expectedDatabase,
+                        suppressEntrySelectionRefresh,
+                        enforceStrictNetworkSafety).ConfigureAwait(true);
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
                     return AssignmentAttemptResult.Fail("Timed out while downloading/assigning icon.");
                 }
             }
+        }
+
+        private bool TryValidateBulkRunContext(PwDatabase expectedDatabase, out string reason)
+        {
+            reason = null;
+
+            if (isShuttingDown)
+            {
+                reason = "Plugin is shutting down.";
+                return false;
+            }
+
+            if (host == null)
+            {
+                reason = "Plugin host is not available.";
+                return false;
+            }
+
+            PwDatabase activeDatabase = host.Database;
+            if (expectedDatabase == null || activeDatabase == null || !activeDatabase.IsOpen)
+            {
+                reason = "KeePass database is no longer open.";
+                return false;
+            }
+
+            if (!ReferenceEquals(activeDatabase, expectedDatabase))
+            {
+                reason = "Active KeePass database changed during bulk operation.";
+                return false;
+            }
+
+            return true;
         }
 
         private static bool TryGetPublicHttpsUri(string urlText, out Uri parsedUri)
@@ -743,9 +875,19 @@ namespace FaviconExtractor
             return dialogIcon;
         }
 
-        private async System.Threading.Tasks.Task<AssignmentAttemptResult> TryAssignCandidatesToEntryAsync(PwEntry selectedEntry, IReadOnlyList<FaviconCandidate> candidates, Uri pageUri, CancellationToken userCancellationToken, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
+        private async System.Threading.Tasks.Task<AssignmentAttemptResult> TryAssignCandidatesToEntryAsync(
+            PwEntry selectedEntry,
+            IReadOnlyList<FaviconCandidate> candidates,
+            Uri pageUri,
+            CancellationToken userCancellationToken,
+            CancellationToken cancellationToken,
+            StringBuilder sb,
+            Action<string> onStatus,
+            PwDatabase expectedDatabase = null,
+            bool suppressEntrySelectionRefresh = false,
+            bool enforceStrictNetworkSafety = false)
         {
-            PwDatabase database = host.Database;
+            PwDatabase database = expectedDatabase ?? (host != null ? host.Database : null);
             if (database == null || !database.IsOpen)
             {
                 return AssignmentAttemptResult.Fail("No open KeePass database.");
@@ -815,10 +957,25 @@ namespace FaviconExtractor
                     attemptedCount++;
                     cancellationToken.ThrowIfCancellationRequested();
 
+                    if (enforceStrictNetworkSafety)
+                    {
+                        UriSafetyClassification safety = await NetworkSafety
+                            .ClassifyUriSafetyAsync(candidate.IconUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken)
+                            .ConfigureAwait(true);
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        if (safety != UriSafetyClassification.Public)
+                        {
+                            throw new InvalidOperationException(safety == UriSafetyClassification.Unknown
+                                ? "Candidate URL could not be validated as public."
+                                : "Candidate URL resolves to private or loopback address.");
+                        }
+                    }
+
                     Stopwatch downloadStopwatch = Stopwatch.StartNew();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " downloading...");
                     byte[] sourceBytes = await FaviconImageDownloader
-                        .DownloadAsync(candidate.IconUri, cancellationToken)
+                        .DownloadAsync(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
                         .ConfigureAwait(true);
                     downloadStopwatch.Stop();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
@@ -841,7 +998,10 @@ namespace FaviconExtractor
                     normalizeAssignStopwatch.Stop();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " normalize/assign completed (" + normalizeAssignStopwatch.ElapsedMilliseconds + "ms).");
 
-                    RefreshEntryListIcons(selectedEntry);
+                    if (!suppressEntrySelectionRefresh)
+                    {
+                        RefreshEntryListIcons(selectedEntry);
+                    }
 
                     assigned = true;
                     assignedCandidate = candidate;
@@ -918,10 +1078,25 @@ namespace FaviconExtractor
                                 attemptedCount++;
                                 cancellationToken.ThrowIfCancellationRequested();
 
+                                if (enforceStrictNetworkSafety)
+                                {
+                                    UriSafetyClassification rescueSafety = await NetworkSafety
+                                        .ClassifyUriSafetyAsync(candidate.IconUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken)
+                                        .ConfigureAwait(true);
+                                    cancellationToken.ThrowIfCancellationRequested();
+
+                                    if (rescueSafety != UriSafetyClassification.Public)
+                                    {
+                                        throw new InvalidOperationException(rescueSafety == UriSafetyClassification.Unknown
+                                            ? "Rescue candidate URL could not be validated as public."
+                                            : "Rescue candidate URL resolves to private or loopback address.");
+                                    }
+                                }
+
                                 Stopwatch downloadStopwatch = Stopwatch.StartNew();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " downloading...");
                                 byte[] sourceBytes = await FaviconImageDownloader
-                                    .DownloadAsync(candidate.IconUri, cancellationToken)
+                                    .DownloadAsync(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
                                     .ConfigureAwait(true);
                                 downloadStopwatch.Stop();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
@@ -944,7 +1119,10 @@ namespace FaviconExtractor
                                 normalizeAssignStopwatch.Stop();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " normalize/assign completed (" + normalizeAssignStopwatch.ElapsedMilliseconds + "ms).");
 
-                                RefreshEntryListIcons(selectedEntry);
+                                if (!suppressEntrySelectionRefresh)
+                                {
+                                    RefreshEntryListIcons(selectedEntry);
+                                }
 
                                 sb.AppendLine("Assigned custom icon to entry.");
                                 sb.AppendLine("Initially assigned from candidate #" + assignedCandidateIndex + ": " + assignedCandidate.IconUri);

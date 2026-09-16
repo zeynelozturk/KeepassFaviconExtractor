@@ -6,41 +6,56 @@ using System.Threading.Tasks;
 
 namespace FaviconExtractor
 {
+    internal enum UriSafetyClassification
+    {
+        Public = 0,
+        PrivateOrLoopback = 1,
+        Unknown = 2
+    }
+
     internal static class NetworkSafety
     {
         public static async Task<bool> IsPrivateOrLoopbackUriAsync(Uri uri, TimeSpan resolveTimeout, CancellationToken cancellationToken)
         {
+            UriSafetyClassification classification = await ClassifyUriSafetyAsync(uri, resolveTimeout, cancellationToken).ConfigureAwait(false);
+            return classification == UriSafetyClassification.PrivateOrLoopback;
+        }
+
+        public static async Task<UriSafetyClassification> ClassifyUriSafetyAsync(Uri uri, TimeSpan resolveTimeout, CancellationToken cancellationToken)
+        {
             if (uri == null || !uri.IsAbsoluteUri)
             {
-                return false;
+                return UriSafetyClassification.Unknown;
             }
 
             if (uri.IsLoopback)
             {
-                return true;
+                return UriSafetyClassification.PrivateOrLoopback;
             }
 
             IPAddress parsed;
             if (IPAddress.TryParse(uri.Host, out parsed))
             {
-                return IsPrivateOrLoopbackAddress(parsed);
+                return IsPrivateOrLoopbackAddress(parsed)
+                    ? UriSafetyClassification.PrivateOrLoopback
+                    : UriSafetyClassification.Public;
             }
 
             IPAddress[] addresses = await ResolveAddressesAsync(uri.Host, resolveTimeout, cancellationToken).ConfigureAwait(false);
             if (addresses == null || addresses.Length == 0)
             {
-                return false;
+                return UriSafetyClassification.Unknown;
             }
 
             for (int i = 0; i < addresses.Length; i++)
             {
                 if (IsPrivateOrLoopbackAddress(addresses[i]))
                 {
-                    return true;
+                    return UriSafetyClassification.PrivateOrLoopback;
                 }
             }
 
-            return false;
+            return UriSafetyClassification.Public;
         }
 
         internal static bool IsPrivateOrLoopbackAddress(IPAddress address)

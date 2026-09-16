@@ -10,7 +10,7 @@ namespace FaviconExtractor
     {
         private static readonly HttpClient HttpClient = CreateHttpClient();
 
-        public static async Task<byte[]> DownloadAsync(Uri iconUri, CancellationToken cancellationToken)
+        public static async Task<byte[]> DownloadAsync(Uri iconUri, CancellationToken cancellationToken, bool enforceStrictPrivateAddressBlocking = false)
         {
             if (iconUri == null)
             {
@@ -34,7 +34,20 @@ namespace FaviconExtractor
                     ? response.RequestMessage.RequestUri
                     : iconUri;
 
-                if (FaviconDiscoveryPreferences.EnforcePrivateAddressBlocking
+                if (enforceStrictPrivateAddressBlocking)
+                {
+                    UriSafetyClassification classification = await NetworkSafety
+                        .ClassifyUriSafetyAsync(finalUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    if (classification != UriSafetyClassification.Public)
+                    {
+                        throw new InvalidOperationException(classification == UriSafetyClassification.Unknown
+                            ? "Icon response target could not be validated as public."
+                            : "Icon response target is a private or loopback address.");
+                    }
+                }
+                else if (FaviconDiscoveryPreferences.EnforcePrivateAddressBlocking
                     && await NetworkSafety.IsPrivateOrLoopbackUriAsync(finalUri, FaviconDiscoveryPreferences.FallbackProbeTimeout, cancellationToken).ConfigureAwait(false))
                 {
                     throw new InvalidOperationException("Icon response target is a private or loopback address.");
