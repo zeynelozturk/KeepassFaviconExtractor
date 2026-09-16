@@ -447,8 +447,8 @@ namespace FaviconExtractor
                     DialogResult confirmationResult = confirmationDialog.ShowDialog(host.MainWindow);
                     if (confirmationResult != DialogResult.OK)
                     {
-                        statusForm.AppendLineSafe("Canceled by user.");
-                        statusForm.MarkCanceled();
+                        statusForm.MarkCompletedWithCountdown(0);
+                        statusForm.Close();
                         return;
                     }
 
