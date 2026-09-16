@@ -284,73 +284,188 @@ namespace FaviconExtractor
 
             try
             {
-                PwEntry selectedEntry = host.MainWindow.GetSelectedEntry(false);
-                if (selectedEntry == null)
+                PwEntry[] selectedEntries = host.MainWindow.GetSelectedEntries();
+                if (selectedEntries == null || selectedEntries.Length == 0)
+                {
+                    PwEntry selectedEntry = host.MainWindow.GetSelectedEntry(false);
+                    if (selectedEntry != null)
+                    {
+                        selectedEntries = new[] { selectedEntry };
+                    }
+                }
+
+                if (selectedEntries == null || selectedEntries.Length == 0)
                 {
                     statusForm.AppendLineSafe(string.Empty);
                     statusForm.AppendLineSafe("Extraction failed.");
-                    statusForm.AppendLineSafe("Reason: Select an entry first.");
+                    statusForm.AppendLineSafe("Reason: Select at least one entry first.");
                     statusForm.MarkFailed();
                     return;
                 }
 
-                string url = selectedEntry.Strings.ReadSafe(PwDefs.UrlField);
-                if (string.IsNullOrWhiteSpace(url))
-                {
-                    using (PromptDialog dialog = new PromptDialog())
-                    {
-                        dialog.Icon = GetDialogIcon();
-                        DialogResult promptResult = dialog.ShowDialog(host.MainWindow);
-                        if (promptResult != DialogResult.OK)
-                        {
-                            statusForm.AppendLineSafe("Cancelled by user.");
-                            statusForm.MarkCanceled();
-                            return;
-                        }
-                        url = dialog.PromptedUrl;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(url))
-                    {
-                        statusForm.AppendLineSafe(string.Empty);
-                        statusForm.AppendLineSafe("Extraction failed.");
-                        statusForm.AppendLineSafe("Reason: No URL was provided.");
-                        statusForm.MarkFailed();
-                        return;
-                    }
-                }
-
                 CancellationToken cancellationToken = extractCancellationTokenSource.Token;
-
-                AssignmentAttemptResult assignmentResult = await ProcessEntryExtractionAsync(
-                    selectedEntry,
-                    url,
-                    cancellationToken,
-                    statusForm.AppendLineSafe).ConfigureAwait(true);
-
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (assignmentResult.Success)
+                PwDatabase runDatabase = host.Database;
+                if (!TryValidateRunContext(runDatabase, out string contextReason))
                 {
-                    statusForm.SetAssignedIconPreview(assignmentResult.AssignedIconPngBytes);
-                    if (!string.IsNullOrWhiteSpace(assignmentResult.WarningMessage))
-                    {
-                        statusForm.AppendLineSafe("Warning: " + assignmentResult.WarningMessage);
-                    }
-                    statusForm.AppendLineSafe(string.Empty);
-                    statusForm.AppendLineSafe("Success: icon assigned.");
-                    statusForm.MarkCompletedWithCountdown(3);
+                    statusForm.AppendLineSafe("Extraction failed.");
+                    statusForm.AppendLineSafe("Reason: " + contextReason);
+                    statusForm.MarkFailed();
                     return;
                 }
 
-                statusForm.AppendLineSafe(string.Empty);
-                statusForm.AppendLineSafe("Extraction failed.");
-                if (!string.IsNullOrWhiteSpace(assignmentResult.FailureReason))
+                if (selectedEntries.Length == 1)
                 {
-                    statusForm.AppendLineSafe("Reason: " + assignmentResult.FailureReason);
+                    PwEntry selectedEntry = selectedEntries[0];
+                    string url = selectedEntry.Strings.ReadSafe(PwDefs.UrlField);
+                    if (string.IsNullOrWhiteSpace(url))
+                    {
+                        using (PromptDialog dialog = new PromptDialog())
+                        {
+                            dialog.Icon = GetDialogIcon();
+                            DialogResult promptResult = dialog.ShowDialog(host.MainWindow);
+                            if (promptResult != DialogResult.OK)
+                            {
+                                statusForm.AppendLineSafe("Cancelled by user.");
+                                statusForm.MarkCanceled();
+                                return;
+                            }
+                            url = dialog.PromptedUrl;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(url))
+                        {
+                            statusForm.AppendLineSafe(string.Empty);
+                            statusForm.AppendLineSafe("Extraction failed.");
+                            statusForm.AppendLineSafe("Reason: No URL was provided.");
+                            statusForm.MarkFailed();
+                            return;
+                        }
+                    }
+
+                    AssignmentAttemptResult assignmentResult = await ProcessEntryExtractionAsync(
+                        selectedEntry,
+                        url,
+                        cancellationToken,
+                        statusForm.AppendLineSafe,
+                        runDatabase,
+                        false,
+                        false).ConfigureAwait(true);
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (assignmentResult.Success)
+                    {
+                        statusForm.SetAssignedIconPreview(assignmentResult.AssignedIconPngBytes);
+                        if (!string.IsNullOrWhiteSpace(assignmentResult.WarningMessage))
+                        {
+                            statusForm.AppendLineSafe("Warning: " + assignmentResult.WarningMessage);
+                        }
+                        statusForm.AppendLineSafe(string.Empty);
+                        statusForm.AppendLineSafe("Success: icon assigned.");
+                        statusForm.MarkCompletedWithCountdown(3);
+                        return;
+                    }
+
+                    statusForm.AppendLineSafe(string.Empty);
+                    statusForm.AppendLineSafe("Extraction failed.");
+                    if (!string.IsNullOrWhiteSpace(assignmentResult.FailureReason))
+                    {
+                        statusForm.AppendLineSafe("Reason: " + assignmentResult.FailureReason);
+                    }
+
+                    statusForm.MarkFailed();
+                    return;
                 }
 
-                statusForm.MarkFailed();
+                int totalAssigned = 0;
+                int totalFailed = 0;
+                int totalSkipped = 0;
+                List<string> failedEntries = new List<string>();
+
+                statusForm.AppendLineSafe(string.Format("Processing {0} selected entries...", selectedEntries.Length));
+                statusForm.AppendLineSafe(string.Empty);
+
+                for (int i = 0; i < selectedEntries.Length; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (!TryValidateRunContext(runDatabase, out string runningContextReason))
+                    {
+                        statusForm.AppendLineSafe(string.Empty);
+                        statusForm.AppendLineSafe("Selection run stopped.");
+                        statusForm.AppendLineSafe("Reason: " + runningContextReason);
+                        statusForm.MarkFailed();
+                        return;
+                    }
+
+                    PwEntry currentEntry = selectedEntries[i];
+                    if (currentEntry == null)
+                    {
+                        totalSkipped++;
+                        continue;
+                    }
+
+                    string entryTitle = currentEntry.Strings.ReadSafe(PwDefs.TitleField);
+                    if (string.IsNullOrWhiteSpace(entryTitle))
+                    {
+                        entryTitle = "(untitled)";
+                    }
+
+                    string entryUrl = currentEntry.Strings.ReadSafe(PwDefs.UrlField);
+                    if (string.IsNullOrWhiteSpace(entryUrl))
+                    {
+                        totalSkipped++;
+                        statusForm.AppendLineSafe(string.Format("[{0}/{1}] '{2}': Skipped (no URL configured).", i + 1, selectedEntries.Length, entryTitle));
+                        statusForm.AppendLineSafe(string.Empty);
+                        continue;
+                    }
+
+                    statusForm.AppendLineSafe(string.Format("[{0}/{1}] Extracting favicon for '{2}' ({3})...", i + 1, selectedEntries.Length, entryTitle, entryUrl));
+
+                    AssignmentAttemptResult assignmentResult = await ProcessEntryExtractionAsync(
+                        currentEntry,
+                        entryUrl,
+                        cancellationToken,
+                        message => statusForm.AppendLineSafe("  -> " + message),
+                        runDatabase,
+                        true,
+                        false).ConfigureAwait(true);
+
+                    if (assignmentResult.Success)
+                    {
+                        totalAssigned++;
+                        statusForm.SetAssignedIconPreview(assignmentResult.AssignedIconPngBytes);
+                        statusForm.AppendLineSafe(string.Format("  -> Success: Icon assigned to '{0}'.", entryTitle));
+                    }
+                    else
+                    {
+                        totalFailed++;
+                        failedEntries.Add(entryTitle);
+                        statusForm.AppendLineSafe(string.Format("  -> Error: {0}", assignmentResult.FailureReason));
+                    }
+
+                    statusForm.AppendLineSafe(string.Empty);
+                }
+
+                RefreshEntryListIcons(null);
+
+                statusForm.AppendLineSafe("========================================");
+                statusForm.AppendLineSafe(string.Format("Selection run finished: {0} assigned, {1} failed, {2} skipped.", totalAssigned, totalFailed, totalSkipped));
+                if (failedEntries.Count > 0)
+                {
+                    statusForm.AppendLineSafe("Failed entries: " + BuildCroppedFailedEntriesText(failedEntries));
+                }
+                statusForm.AppendLineSafe("========================================");
+
+                if (totalAssigned > 0)
+                {
+                    statusForm.MarkCompleted();
+                }
+                else
+                {
+                    statusForm.MarkFailed();
+                }
+                return;
             }
             catch (OperationCanceledException)
             {
@@ -460,7 +575,7 @@ namespace FaviconExtractor
                 PwDatabase runDatabase = host.Database;
                 CancellationToken cancellationToken = extractCancellationTokenSource.Token;
 
-                if (!TryValidateBulkRunContext(runDatabase, out string contextReason))
+                if (!TryValidateRunContext(runDatabase, out string contextReason))
                 {
                     statusForm.AppendLineSafe("Extraction failed.");
                     statusForm.AppendLineSafe("Reason: " + contextReason);
@@ -561,7 +676,7 @@ namespace FaviconExtractor
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    if (!TryValidateBulkRunContext(runDatabase, out string runningContextReason))
+                    if (!TryValidateRunContext(runDatabase, out string runningContextReason))
                     {
                         statusForm.AppendLineSafe(string.Empty);
                         statusForm.AppendLineSafe("Bulk download stopped.");
@@ -608,19 +723,13 @@ namespace FaviconExtractor
                 statusForm.AppendLineSafe(string.Format("Bulk download finished: {0} assigned, {1} failed.", totalAssigned, totalFailed));
                 if (failedEntries.Count > 0)
                 {
-                    string failedEntriesText = string.Join(", ", failedEntries);
-                    if (failedEntriesText.Length > 250)
-                    {
-                        failedEntriesText = failedEntriesText.Substring(0, 247) + "...";
-                    }
-
-                    statusForm.AppendLineSafe("Failed entries: " + failedEntriesText);
+                    statusForm.AppendLineSafe("Failed entries: " + BuildCroppedFailedEntriesText(failedEntries));
                 }
                 statusForm.AppendLineSafe("========================================");
 
                 if (totalAssigned > 0)
                 {
-                    statusForm.MarkCompletedWithCountdown(5);
+                    statusForm.MarkCompleted();
                 }
                 else
                 {
@@ -744,7 +853,24 @@ namespace FaviconExtractor
             }
         }
 
-        private bool TryValidateBulkRunContext(PwDatabase expectedDatabase, out string reason)
+        private static string BuildCroppedFailedEntriesText(IReadOnlyList<string> failedEntries)
+        {
+            if (failedEntries == null || failedEntries.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            const int maxLength = 250;
+            string failedEntriesText = string.Join(", ", failedEntries);
+            if (failedEntriesText.Length <= maxLength)
+            {
+                return failedEntriesText;
+            }
+
+            return failedEntriesText.Substring(0, maxLength - 3) + "...";
+        }
+
+        private bool TryValidateRunContext(PwDatabase expectedDatabase, out string reason)
         {
             reason = null;
 
@@ -2213,6 +2339,11 @@ namespace FaviconExtractor
                 }
 
                 closeCountdownTimer.Start();
+            }
+
+            public void MarkCompleted()
+            {
+                SetTerminalWithoutAutoClose(false);
             }
 
             public void MarkFailed()
