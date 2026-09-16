@@ -382,9 +382,9 @@ namespace FaviconExtractor
 
                 CancellationToken cancellationToken = extractCancellationTokenSource.Token;
                 var allEntries = host.Database.RootGroup.GetEntries(true);
-                List<PwEntry> entriesToProcess = new List<PwEntry>();
+                List<PwEntry> keyIconEntriesToProcess = new List<PwEntry>();
+                List<PwEntry> anyBuiltInEntriesToProcess = new List<PwEntry>();
                 int skippedWithCustomIcon = 0;
-                int skippedWithNonDefaultIcon = 0;
                 int skippedNoOrInvalidUrl = 0;
                 int skippedPrivateOrLoopback = 0;
 
@@ -404,12 +404,6 @@ namespace FaviconExtractor
                         continue;
                     }
 
-                    if (entry.IconId != PwIcon.Key)
-                    {
-                        skippedWithNonDefaultIcon++;
-                        continue;
-                    }
-
                     string entryUrl = entry.Strings.ReadSafe(PwDefs.UrlField);
                     if (!TryGetPublicHttpsUri(entryUrl, out Uri parsedUri))
                     {
@@ -423,19 +417,24 @@ namespace FaviconExtractor
                         continue;
                     }
 
-                    entriesToProcess.Add(entry);
+                    anyBuiltInEntriesToProcess.Add(entry);
+                    if (entry.IconId == PwIcon.Key)
+                    {
+                        keyIconEntriesToProcess.Add(entry);
+                    }
                 }
 
-                if (entriesToProcess.Count == 0)
+                if (anyBuiltInEntriesToProcess.Count == 0)
                 {
                     statusForm.AppendLineSafe("Extraction failed.");
-                    statusForm.AppendLineSafe("Reason: No entries with the default key icon and public HTTPS URLs were found.");
-                    statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} with non-default built-in icon, {2} without valid HTTPS URL, {3} with private/loopback endpoint.", skippedWithCustomIcon, skippedWithNonDefaultIcon, skippedNoOrInvalidUrl, skippedPrivateOrLoopback));
+                    statusForm.AppendLineSafe("Reason: No entries without custom icons and with public HTTPS URLs were found.");
+                    statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} without valid HTTPS URL, {2} with private/loopback endpoint.", skippedWithCustomIcon, skippedNoOrInvalidUrl, skippedPrivateOrLoopback));
                     statusForm.MarkFailed();
                     return;
                 }
 
-                using (BulkDownloadConfirmationDialog confirmationDialog = new BulkDownloadConfirmationDialog(entriesToProcess))
+                bool replaceAnyKeePassBasedIcons;
+                using (BulkDownloadConfirmationDialog confirmationDialog = new BulkDownloadConfirmationDialog(keyIconEntriesToProcess, anyBuiltInEntriesToProcess))
                 {
                     Icon dialogWindowIcon = GetDialogIcon();
                     if (dialogWindowIcon != null)
@@ -452,8 +451,27 @@ namespace FaviconExtractor
                         statusForm.MarkCanceled();
                         return;
                     }
+
+                    replaceAnyKeePassBasedIcons = confirmationDialog.ReplaceAnyKeePassBasedIcons;
                 }
 
+                List<PwEntry> entriesToProcess = replaceAnyKeePassBasedIcons
+                    ? anyBuiltInEntriesToProcess
+                    : keyIconEntriesToProcess;
+
+                int skippedWithNonDefaultIcon = replaceAnyKeePassBasedIcons
+                    ? 0
+                    : (anyBuiltInEntriesToProcess.Count - keyIconEntriesToProcess.Count);
+
+                if (entriesToProcess.Count == 0)
+                {
+                    statusForm.AppendLineSafe("Extraction failed.");
+                    statusForm.AppendLineSafe("Reason: No entries matched the selected mode.");
+                    statusForm.MarkFailed();
+                    return;
+                }
+
+                statusForm.AppendLineSafe("Mode: " + (replaceAnyKeePassBasedIcons ? "Replace any KeePass based icons" : "Replace key icons only"));
                 statusForm.AppendLineSafe(string.Format("Found {0} eligible entries.", entriesToProcess.Count));
                 statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} with non-default built-in icon, {2} without valid HTTPS URL, {3} with private/loopback endpoint.", skippedWithCustomIcon, skippedWithNonDefaultIcon, skippedNoOrInvalidUrl, skippedPrivateOrLoopback));
                 statusForm.AppendLineSafe(string.Empty);
@@ -1504,8 +1522,20 @@ namespace FaviconExtractor
 
         private sealed class BulkDownloadConfirmationDialog : Form
         {
-            public BulkDownloadConfirmationDialog(IReadOnlyList<PwEntry> entries)
+            private readonly IReadOnlyList<PwEntry> keyEntries;
+            private readonly IReadOnlyList<PwEntry> anyBuiltInEntries;
+            private readonly RadioButton keyOnlyRadio;
+            private readonly RadioButton anyBuiltInRadio;
+            private readonly Label countLabel;
+            private readonly TextBox entriesTextBox;
+
+            public bool ReplaceAnyKeePassBasedIcons { get; private set; }
+
+            public BulkDownloadConfirmationDialog(IReadOnlyList<PwEntry> keyEntries, IReadOnlyList<PwEntry> anyBuiltInEntries)
             {
+                this.keyEntries = keyEntries ?? Array.Empty<PwEntry>();
+                this.anyBuiltInEntries = anyBuiltInEntries ?? Array.Empty<PwEntry>();
+
                 Text = "Bulk Favicon Download";
                 Width = 680;
                 Height = 460;
@@ -1514,30 +1544,84 @@ namespace FaviconExtractor
                 MaximizeBox = false;
                 MinimizeBox = false;
 
-                Label infoLabel = new Label
+                Label headingLabel = new Label
                 {
-                    Text = "We will now search favicons for these entries:",
+                    Text = "Please select which icons to update",
                     Dock = DockStyle.Top,
-                    Height = 28,
+                    Height = 30,
                     TextAlign = ContentAlignment.MiddleLeft
                 };
 
-                TextBox entriesTextBox = new TextBox
+                keyOnlyRadio = new RadioButton
+                {
+                    Text = "Replace key icons only",
+                    AutoSize = true,
+                    Checked = true,
+                    Margin = new Padding(0, 2, 0, 2)
+                };
+                keyOnlyRadio.CheckedChanged += (_, __) => RefreshEntryList();
+
+                anyBuiltInRadio = new RadioButton
+                {
+                    Text = "Replace any KeePass based icons",
+                    AutoSize = true,
+                    Margin = new Padding(0, 2, 0, 2)
+                };
+                anyBuiltInRadio.CheckedChanged += (_, __) => RefreshEntryList();
+
+                Label warningLabel = new Label
+                {
+                    Text = "May replace intentionally selected built-in icons.",
+                    AutoSize = true,
+                    ForeColor = SystemColors.GrayText,
+                    Margin = new Padding(18, 0, 0, 6)
+                };
+
+                FlowLayoutPanel optionsPanel = new FlowLayoutPanel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 70,
+                    FlowDirection = FlowDirection.TopDown,
+                    WrapContents = false,
+                    AutoScroll = false,
+                    Margin = new Padding(0)
+                };
+                optionsPanel.Controls.Add(keyOnlyRadio);
+                optionsPanel.Controls.Add(anyBuiltInRadio);
+                optionsPanel.Controls.Add(warningLabel);
+
+                countLabel = new Label
+                {
+                    Dock = DockStyle.Top,
+                    Height = 28,
+                    ForeColor = SystemColors.GrayText,
+                    Padding = new Padding(0, 6, 0, 6),
+                    TextAlign = ContentAlignment.MiddleLeft
+                };
+
+                Label listCaptionLabel = new Label
+                {
+                    Text = "We will now search favicons for these entries:",
+                    Dock = DockStyle.Top,
+                    Height = 24,
+                    TextAlign = ContentAlignment.MiddleLeft
+                };
+
+                entriesTextBox = new TextBox
                 {
                     Multiline = true,
                     ReadOnly = true,
                     ScrollBars = ScrollBars.Vertical,
                     WordWrap = false,
-                    Dock = DockStyle.Fill,
-                    Text = BuildEntriesText(entries)
+                    Dock = DockStyle.Fill
                 };
 
                 Button okButton = new Button
                 {
                     Text = "Start",
-                    DialogResult = DialogResult.OK,
                     Width = 100
                 };
+                okButton.Click += (_, __) => OnStartClick();
 
                 Button cancelButton = new Button
                 {
@@ -1562,14 +1646,28 @@ namespace FaviconExtractor
                     Dock = DockStyle.Fill,
                     Padding = new Padding(8, 8, 8, 0)
                 };
+
+                Panel separatorPanel = new Panel
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 1,
+                    BackColor = Color.LightGray
+                };
+
                 contentPanel.Controls.Add(entriesTextBox);
-                contentPanel.Controls.Add(infoLabel);
+                contentPanel.Controls.Add(listCaptionLabel);
+                contentPanel.Controls.Add(countLabel);
+                contentPanel.Controls.Add(optionsPanel);
+                contentPanel.Controls.Add(headingLabel);
+                contentPanel.Controls.Add(separatorPanel);
 
                 Controls.Add(contentPanel);
                 Controls.Add(buttonPanel);
 
                 AcceptButton = okButton;
                 CancelButton = cancelButton;
+
+                RefreshEntryList();
             }
 
             public void PositionNearOwner(Form owner)
@@ -1621,6 +1719,26 @@ namespace FaviconExtractor
                 }
 
                 return sb.ToString();
+            }
+
+            private void OnStartClick()
+            {
+                ReplaceAnyKeePassBasedIcons = anyBuiltInRadio.Checked;
+                DialogResult = DialogResult.OK;
+                Close();
+            }
+
+            private IReadOnlyList<PwEntry> GetActiveEntries()
+            {
+                return anyBuiltInRadio.Checked ? anyBuiltInEntries : keyEntries;
+            }
+
+            private void RefreshEntryList()
+            {
+                IReadOnlyList<PwEntry> entries = GetActiveEntries();
+                string modeText = anyBuiltInRadio.Checked ? "Replace any KeePass based icons" : "Replace key icons only";
+                countLabel.Text = string.Format("Mode: {0}  |  Entries: {1}", modeText, entries.Count);
+                entriesTextBox.Text = BuildEntriesText(entries);
             }
         }
 
