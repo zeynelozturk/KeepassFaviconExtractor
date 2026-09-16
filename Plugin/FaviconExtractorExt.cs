@@ -497,7 +497,13 @@ namespace FaviconExtractor
                 statusForm.AppendLineSafe(string.Format("Bulk download finished: {0} assigned, {1} failed.", totalAssigned, totalFailed));
                 if (failedEntries.Count > 0)
                 {
-                    statusForm.AppendLineSafe("Failed entries: " + string.Join(", ", failedEntries));
+                    string failedEntriesText = string.Join(", ", failedEntries);
+                    if (failedEntriesText.Length > 250)
+                    {
+                        failedEntriesText = failedEntriesText.Substring(0, 247) + "...";
+                    }
+
+                    statusForm.AppendLineSafe("Failed entries: " + failedEntriesText);
                 }
                 statusForm.AppendLineSafe("========================================");
 
@@ -1620,6 +1626,8 @@ namespace FaviconExtractor
 
         private sealed class ExtractionStatusForm : Form
         {
+            private const int MaxOutputCharacters = 5000;
+
             private readonly TextBox outputTextBox;
             private readonly RoundedPictureBox iconPreviewBox;
             private readonly Label iconSizeLabel;
@@ -1864,6 +1872,20 @@ namespace FaviconExtractor
                 }
 
                 outputTextBox.AppendText(line + Environment.NewLine);
+                TrimOutputIfNeeded();
+            }
+
+            private void TrimOutputIfNeeded()
+            {
+                string text = outputTextBox.Text;
+                if (string.IsNullOrEmpty(text) || text.Length <= MaxOutputCharacters)
+                {
+                    return;
+                }
+
+                outputTextBox.Text = text.Substring(text.Length - MaxOutputCharacters, MaxOutputCharacters);
+                outputTextBox.SelectionStart = outputTextBox.TextLength;
+                outputTextBox.ScrollToCaret();
             }
 
             public void MarkCompletedWithCountdown(int seconds)
