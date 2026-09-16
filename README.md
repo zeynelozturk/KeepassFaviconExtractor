@@ -14,6 +14,8 @@ uses multiple discovery methods, therefore it has a higher likelihood of finding
   Google, DuckDuckGo.
 - 128x128 is the default size. Smaller icons aren't upscaled, but larger icons are downscaled to 128x128.
 - Live extraction status and diagnostics windows.
+- Multiple selection support for batch extraction.
+- "Download missing icons" feature for all entries in a database.
 - Guard against storing duplicate icons in the KeePass database.
 - Diagnostics window allows you to check if extension is working properly.
 
@@ -35,10 +37,6 @@ convert it to a suitable format. If a favicon is found, it will be assigned to t
 Note that this extension will change the icon of entry without confirmation.
 
 We do not modify or delete previously stored icons.
-
-## Limitations
-
-- Single entry at a time (cannot extract favicons for multiple entries simultaneously)
 
 ## Network and privacy behavior
 
