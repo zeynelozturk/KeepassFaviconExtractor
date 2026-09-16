@@ -551,7 +551,7 @@ namespace FaviconExtractor
                     return;
                 }
 
-                statusForm.AppendLineSafe("Mode: " + (replaceAnyKeePassBasedIcons ? "Replace any KeePass based icons" : "Replace key icons only"));
+                statusForm.AppendLineSafe("Mode: " + (replaceAnyKeePassBasedIcons ? "Replace any KeePass based icons" : "Replace default 'Key' icons only"));
                 statusForm.AppendLineSafe(string.Format("Found {0} eligible entries.", entriesToProcess.Count));
                 statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} with non-default built-in icon, {2} without valid HTTPS URL.", skippedWithCustomIcon, skippedWithNonDefaultIcon, skippedNoOrInvalidUrl));
                 statusForm.AppendLineSafe("Safety: private/loopback or unresolved targets are blocked during icon fetch.");
@@ -1732,7 +1732,7 @@ namespace FaviconExtractor
 
                 keyOnlyRadio = new RadioButton
                 {
-                    Text = "Replace key icons only",
+                    Text = "Replace default 'Key' icons only",
                     AutoSize = true,
                     Checked = true,
                     Margin = new Padding(0, 2, 0, 2)
@@ -1914,7 +1914,7 @@ namespace FaviconExtractor
             private void RefreshEntryList()
             {
                 IReadOnlyList<PwEntry> entries = GetActiveEntries();
-                string modeText = anyBuiltInRadio.Checked ? "Replace any KeePass based icons" : "Replace key icons only";
+                string modeText = anyBuiltInRadio.Checked ? "Replace any KeePass based icons" : "Replace default 'Key' icons only";
                 countLabel.Text = string.Format("Mode: {0}  |  Entries: {1}", modeText, entries.Count);
                 entriesTextBox.Text = BuildEntriesText(entries);
             }
