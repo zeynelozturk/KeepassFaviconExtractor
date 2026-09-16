@@ -126,6 +126,79 @@ namespace FaviconExtractor
                 AppendLine(sb, string.Empty, onLine);
             }
 
+            // Additional probes for logo-only providers (do not change other discovery code)
+            AppendLine(sb, "Logo providers (separate probes):", onLine);
+            {
+                string source = "external-logo-hunter";
+                totalServices++;
+                int successCount = 0;
+
+                AppendLine(sb, source + ":", onLine);
+                for (int i = 0; i < ProbeDomains.Length; i++)
+                {
+                    string domain = ProbeDomains[i];
+                    totalProbes++;
+                    Uri uri = new Uri("https://logos.hunter.io/" + Uri.EscapeDataString(domain));
+                    Stopwatch sw = Stopwatch.StartNew();
+
+                    try
+                    {
+                        using (HttpResponseMessage response = await HttpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
+                        {
+                            sw.Stop();
+
+                            Uri finalUri = response.RequestMessage != null && response.RequestMessage.RequestUri != null
+                                ? response.RequestMessage.RequestUri
+                                : uri;
+                            string type = response.Content != null && response.Content.Headers != null && response.Content.Headers.ContentType != null
+                                ? response.Content.Headers.ContentType.MediaType
+                                : string.Empty;
+
+                            bool ok = response.IsSuccessStatusCode && LooksLikeImage(type, finalUri);
+                            if (ok)
+                            {
+                                successCount++;
+                                totalSuccess++;
+                            }
+
+                            AppendLine(sb, "  - " + domain
+                                + " => " + (ok ? "OK" : "FAIL")
+                                + " (status=" + (int)response.StatusCode
+                                + ", type=" + (string.IsNullOrWhiteSpace(type) ? "(none)" : type)
+                                + ", " + sw.ElapsedMilliseconds + "ms)", onLine);
+                        }
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        sw.Stop();
+                        AppendLine(sb, "  - " + domain + " => FAIL (timeout/canceled, " + sw.ElapsedMilliseconds + "ms)", onLine);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        sw.Stop();
+                        AppendLine(sb, "  - " + domain + " => FAIL (" + ex.GetType().Name + ": " + ex.Message + ", " + sw.ElapsedMilliseconds + "ms)", onLine);
+                    }
+                }
+
+                bool serviceSuccessful = successCount > 0;
+                if (serviceSuccessful)
+                {
+                    successfulServices++;
+                }
+                else
+                {
+                    unavailableServices.Add(source);
+                }
+
+                AppendLine(sb, "  Summary: " + successCount + "/" + ProbeDomains.Length + " probes succeeded"
+                    + " => " + (serviceSuccessful ? "SUCCESS" : "FAIL"), onLine);
+                AppendLine(sb, string.Empty, onLine);
+            }
+
             AppendLine(sb, "Overall result: " + GetOverallResultLabel(successfulServices, totalServices), onLine);
             AppendLine(sb, "Overall summary: " + totalSuccess + "/" + totalProbes + " probes succeeded", onLine);
             AppendLine(sb, "Service summary: " + successfulServices + "/" + totalServices + " providers responded to at least one probe", onLine);
