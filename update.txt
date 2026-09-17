@@ -1,3 +1,3 @@
 :
-FaviconExtractor:1.1.1
+FaviconExtractor:1.1.1.0
 :
