@@ -588,6 +588,7 @@ namespace FaviconExtractor
                 List<PwEntry> anyBuiltInEntriesToProcess = new List<PwEntry>();
                 int skippedWithCustomIcon = 0;
                 int skippedNoOrInvalidUrl = 0;
+                int skippedSearchDisabled = 0;
 
                 foreach (PwEntry entry in allEntries)
                 {
@@ -595,6 +596,14 @@ namespace FaviconExtractor
 
                     if (entry == null)
                     {
+                        continue;
+                    }
+
+                    // Respect KeePass's effective/inherited search-enabled state for entries.
+                    // If KeePass would exclude this entry from searches, skip it in the bulk operation.
+                    if (!entry.GetSearchingEnabled())
+                    {
+                        skippedSearchDisabled++;
                         continue;
                     }
 
@@ -623,7 +632,7 @@ namespace FaviconExtractor
                 {
                     statusForm.AppendLineSafe("Extraction failed.");
                     statusForm.AppendLineSafe("Reason: No entries without custom icons and with public HTTPS URLs were found.");
-                    statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} without valid HTTPS URL.", skippedWithCustomIcon, skippedNoOrInvalidUrl));
+                    statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} excluded from search, {2} without valid HTTPS URL.", skippedWithCustomIcon, skippedSearchDisabled, skippedNoOrInvalidUrl));
                     statusForm.MarkFailed();
                     return;
                 }
@@ -668,7 +677,7 @@ namespace FaviconExtractor
 
                 statusForm.AppendLineSafe("Mode: " + (replaceAnyKeePassBasedIcons ? "Replace any KeePass based icons" : "Replace default 'Key' icons only"));
                 statusForm.AppendLineSafe(string.Format("Found {0} eligible entries.", entriesToProcess.Count));
-                statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} with non-default built-in icon, {2} without valid HTTPS URL.", skippedWithCustomIcon, skippedWithNonDefaultIcon, skippedNoOrInvalidUrl));
+                statusForm.AppendLineSafe(string.Format("Skipped entries: {0} with existing custom icon, {1} excluded from search, {2} with non-default built-in icon, {3} without valid HTTPS URL.", skippedWithCustomIcon, skippedSearchDisabled, skippedWithNonDefaultIcon, skippedNoOrInvalidUrl));
                 statusForm.AppendLineSafe("Safety: private/loopback or unresolved targets are blocked during icon fetch.");
                 statusForm.AppendLineSafe(string.Empty);
 
