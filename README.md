@@ -15,7 +15,7 @@ uses multiple discovery methods, therefore it has a higher likelihood of finding
 - 128x128 is the default size. Smaller icons aren't upscaled, but larger icons are downscaled to 128x128.
 - Live extraction status and diagnostics windows.
 - Multiple selection support for batch extraction.
-- "Download missing icons" feature for all entries in a database.
+- "Download missing icons" feature for eligible entries in a database.
 - Guard against storing duplicate icons in the KeePass database.
 - Diagnostics window allows you to check if extension is working properly.
 
