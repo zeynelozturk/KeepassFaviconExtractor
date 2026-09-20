@@ -58,7 +58,7 @@ namespace FaviconExtractor
                 }
 
                 root.DropDownItems.Add(CreateMenuItem("Extract website favicon", OnExtractFaviconClick));
-                root.DropDownItems.Add(CreateMenuItem("Download missing database favicons", OnDownloadMissingFaviconsClick));
+                root.DropDownItems.Add(CreateMenuItem("Download missing database favicons...", OnDownloadMissingFaviconsClick));
                 root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
                 return root;
             }
