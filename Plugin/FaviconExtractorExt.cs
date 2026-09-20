@@ -1430,6 +1430,9 @@ namespace FaviconExtractor
             string iconUrl,
             CancellationToken cancellationToken)
         {
+            // Intentionally run normalization and icon assignment off the UI thread.
+            // This avoids a historical KeePass UI hang observed during icon assignment.
+            // Keep this workaround unless the underlying cause is verified to be fixed.
             return await System.Threading.Tasks.Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
