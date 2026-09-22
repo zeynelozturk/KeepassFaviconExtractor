@@ -12,6 +12,17 @@ When this document conflicts with the actual KeePass 2.61 source, assemblies, or
 
 Do not invent KeePass APIs based on assumptions or examples from other versions.
 
+Local developer note: The author keeps a local reference copy of the KeePass source used for API inspection at:
+
+    C:\Users\Zeynel\source\repos\reference\KeePass
+
+Automated tools and AI assistants running on the author's machine may inspect that path for KeePass API references. For portability when developing locally, you can either:
+
+- clone the upstream KeePass source into third_party/keepass within the project repository, or
+- set the KEEPASS_REF environment variable to point to your local KeePass checkout.
+
+Build scripts and development tools should prefer KEEPASS_REF when it is set.
+
 ## Project requirements
 
 KeePass 2.x plugins should be developed as:
