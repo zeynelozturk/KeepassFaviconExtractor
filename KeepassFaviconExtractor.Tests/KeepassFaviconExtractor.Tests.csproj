@@ -48,6 +48,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="IconNormalizerTests.cs" />
+    <Compile Include="AndroidAppIdentifierTests.cs" />
     <Compile Include="NetworkSafetyTests.cs" />
   </ItemGroup>
   <ItemGroup>

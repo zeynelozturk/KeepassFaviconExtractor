@@ -61,7 +61,6 @@ namespace FaviconExtractor
                 root.DropDownItems.Add(CreateMenuItem("Extract website favicon", OnExtractFaviconClick));
                 root.DropDownItems.Add(CreateMenuItem("Download missing database favicons...", OnDownloadMissingFaviconsClick));
                 root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
-                root.DropDownItems.Add(CreateMenuItem("Test Android App Icon Lookup", OnTestAndroidAppIconLookupClick));
                 return root;
             }
 
@@ -99,97 +98,6 @@ namespace FaviconExtractor
             if (cts != null && !cts.IsCancellationRequested)
             {
                 cts.Cancel();
-            }
-        }
-
-        private async void OnTestAndroidAppIconLookupClick(object sender, EventArgs e)
-        {
-            if (host == null || host.MainWindow == null)
-            {
-                return;
-            }
-
-            Form owner = host.MainWindow as Form;
-            using (var dialog = new PackageNameDialog())
-            {
-                dialog.PositionNearOwner(owner);
-                if (dialog.ShowDialog(owner) != DialogResult.OK)
-                {
-                    return;
-                }
-
-                string package = dialog.PackageName?.Trim();
-                if (string.IsNullOrWhiteSpace(package))
-                {
-                    return;
-                }
-
-                DiagnosticsProgressForm diagnostics = new DiagnosticsProgressForm();
-                Icon windowIcon = GetDialogIcon();
-                if (windowIcon != null)
-                {
-                    diagnostics.Icon = windowIcon;
-                    diagnostics.ShowIcon = true;
-                }
-
-                diagnostics.PositionNearOwner(owner);
-                diagnostics.Show(owner);
-                diagnostics.AppendLineSafe("Starting Android app icon lookup for: " + package);
-
-                try
-                {
-                    AndroidAppIconProvider.LookupResult result = await AndroidAppIconProvider.LookupAsync(package).ConfigureAwait(true);
-                    diagnostics.AppendLineSafe("Package: " + package);
-                    diagnostics.AppendLineSafe("Source URL: " + (result != null && !string.IsNullOrWhiteSpace(result.SourceUrl) ? result.SourceUrl : "(none)"));
-
-                    if (result == null)
-                    {
-                        diagnostics.AppendLineSafe("Lookup returned no result.");
-                        using (var form = new AndroidAppIconTestForm())
-                        {
-                            form.SetResult(package, null, null, "Lookup returned no result.");
-                            form.ShowDialog(owner);
-                        }
-
-                        diagnostics.MarkFailed("No result.");
-                        return;
-                    }
-
-                    if (result.Success)
-                    {
-                        diagnostics.AppendLineSafe("Icon retrieved successfully.");
-                        using (var form = new AndroidAppIconTestForm())
-                        using (var stream = new MemoryStream(result.IconBytes))
-                        using (var preview = Image.FromStream(stream))
-                        {
-                            form.SetResult(package, result.SourceUrl, preview, null);
-                            form.ShowDialog(owner);
-                        }
-
-                        diagnostics.MarkCompleted();
-                        return;
-                    }
-
-                    diagnostics.AppendLineSafe("Lookup failed: " + (result.ErrorMessage ?? "Unknown error"));
-                    using (var form = new AndroidAppIconTestForm())
-                    {
-                        form.SetResult(package, result.SourceUrl, null, result.ErrorMessage ?? "No icon could be retrieved.");
-                        form.ShowDialog(owner);
-                    }
-
-                    diagnostics.MarkFailed(result.ErrorMessage ?? "Lookup failed.");
-                }
-                catch (Exception ex)
-                {
-                    diagnostics.AppendLineSafe("Exception: " + ex.Message);
-                    using (var form = new AndroidAppIconTestForm())
-                    {
-                        form.SetResult(package, null, null, ex.Message);
-                        form.ShowDialog(owner);
-                    }
-
-                    diagnostics.MarkFailed(ex.Message);
-                }
             }
         }
 
@@ -237,79 +145,6 @@ namespace FaviconExtractor
             }
             item.Click += onClick;
             return item;
-        }
-
-        private sealed class PackageNameDialog : Form
-        {
-            private readonly TextBox packageTextBox;
-
-            public string PackageName
-            {
-                get { return packageTextBox.Text; }
-            }
-
-            public PackageNameDialog()
-            {
-                Text = "Android package name";
-                Width = 460;
-                Height = 140;
-                StartPosition = FormStartPosition.CenterParent;
-                FormBorderStyle = FormBorderStyle.FixedDialog;
-                MaximizeBox = false;
-                MinimizeBox = false;
-
-                Label promptLabel = new Label
-                {
-                    Text = "Enter Android package name (e.g. com.patreon.android):",
-                    AutoSize = true,
-                    Location = new System.Drawing.Point(12, 12)
-                };
-
-                packageTextBox = new TextBox
-                {
-                    Location = new System.Drawing.Point(12, 36),
-                    Width = 416
-                };
-
-                Button okButton = new Button
-                {
-                    Text = "OK",
-                    DialogResult = DialogResult.OK,
-                    Location = new System.Drawing.Point(272, 68),
-                    Width = 75
-                };
-
-                Button cancelButton = new Button
-                {
-                    Text = "Cancel",
-                    DialogResult = DialogResult.Cancel,
-                    Location = new System.Drawing.Point(353, 68),
-                    Width = 75
-                };
-
-                Controls.Add(promptLabel);
-                Controls.Add(packageTextBox);
-                Controls.Add(okButton);
-                Controls.Add(cancelButton);
-
-                AcceptButton = okButton;
-                CancelButton = cancelButton;
-            }
-
-            public void PositionNearOwner(Form owner)
-            {
-                if (owner == null)
-                {
-                    StartPosition = FormStartPosition.CenterScreen;
-                    return;
-                }
-
-                int x = owner.Left + ((owner.Width - Width) / 2);
-                int y = owner.Top + ((owner.Height - Height) / 2);
-                if (x < 0) x = 0;
-                if (y < 0) y = 0;
-                Location = new System.Drawing.Point(x, y);
-            }
         }
 
         private Image menuIcon;
@@ -483,7 +318,8 @@ namespace FaviconExtractor
                 {
                     PwEntry selectedEntry = selectedEntries[0];
                     string url = selectedEntry.Strings.ReadSafe(PwDefs.UrlField);
-                    if (string.IsNullOrWhiteSpace(url))
+                    if (string.IsNullOrWhiteSpace(url)
+                        && !TryGetAndroidPackage(selectedEntry, url, out string androidPackage))
                     {
                         using (PromptDialog dialog = new PromptDialog())
                         {
@@ -578,7 +414,8 @@ namespace FaviconExtractor
                     }
 
                     string entryUrl = currentEntry.Strings.ReadSafe(PwDefs.UrlField);
-                    if (string.IsNullOrWhiteSpace(entryUrl))
+                    if (string.IsNullOrWhiteSpace(entryUrl)
+                        && !TryGetAndroidPackage(currentEntry, entryUrl, out string androidPackage))
                     {
                         totalSkipped++;
                         statusForm.AppendLineSafe(string.Format("[{0}/{1}] '{2}': Skipped (no URL configured).", i + 1, selectedEntries.Length, entryTitle));
@@ -586,7 +423,14 @@ namespace FaviconExtractor
                         continue;
                     }
 
-                    statusForm.AppendLineSafe(string.Format("[{0}/{1}] Extracting favicon for '{2}' ({3})...", i + 1, selectedEntries.Length, entryTitle, entryUrl));
+                    string displaySource = entryUrl;
+                    if (string.IsNullOrWhiteSpace(displaySource)
+                        && TryGetAndroidPackage(currentEntry, entryUrl, out string fallbackAndroidPackage))
+                    {
+                        displaySource = "androidapp://" + fallbackAndroidPackage;
+                    }
+
+                    statusForm.AppendLineSafe(string.Format("[{0}/{1}] Extracting favicon for '{2}' ({3})...", i + 1, selectedEntries.Length, entryTitle, displaySource));
 
                     AssignmentAttemptResult assignmentResult = await ProcessEntryExtractionAsync(
                         currentEntry,
@@ -940,6 +784,14 @@ namespace FaviconExtractor
             }
         }
 
+        private static bool TryGetAndroidPackage(PwEntry entry, string entryUrl, out string packageName)
+        {
+            return AndroidAppIdentifier.TryGetPackage(
+                entryUrl,
+                entry == null ? null : entry.Strings.ReadSafe("AndroidApp1"),
+                out packageName);
+        }
+
         private async System.Threading.Tasks.Task<AssignmentAttemptResult> ProcessEntryExtractionAsync(
             PwEntry targetEntry,
             string entryUrl,
@@ -956,7 +808,23 @@ namespace FaviconExtractor
 
             if (string.IsNullOrWhiteSpace(entryUrl))
             {
-                return AssignmentAttemptResult.Fail("No URL was provided.");
+                if (!TryGetAndroidPackage(targetEntry, entryUrl, out string fallbackPackage))
+                {
+                    return AssignmentAttemptResult.Fail("No URL was provided.");
+                }
+
+                entryUrl = "androidapp://" + fallbackPackage;
+            }
+
+            if (TryGetAndroidPackage(targetEntry, entryUrl, out string androidPackage))
+            {
+                return await ProcessAndroidAppIconExtractionAsync(
+                    targetEntry,
+                    androidPackage,
+                    cancellationToken,
+                    onStatus,
+                    expectedDatabase,
+                    suppressEntrySelectionRefresh).ConfigureAwait(true);
             }
 
             HtmlFaviconDiscoveryResult result;
@@ -1625,6 +1493,75 @@ namespace FaviconExtractor
                     throw new InvalidOperationException("Assign failed: " + ex.Message, ex);
                 }
 
+                return new AssignmentExecutionResult
+                {
+                    NormalizedPng = normalizedPng,
+                    AssignedUuid = assignedUuid
+                };
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async System.Threading.Tasks.Task<AssignmentAttemptResult> ProcessAndroidAppIconExtractionAsync(
+            PwEntry targetEntry,
+            string packageName,
+            CancellationToken cancellationToken,
+            Action<string> onStatus,
+            PwDatabase expectedDatabase,
+            bool suppressEntrySelectionRefresh)
+        {
+            ReportStatus(onStatus, "Android app identifier detected: " + packageName);
+            ReportStatus(onStatus, "Looking up Android app icon...");
+
+            AndroidAppIconProvider.LookupResult lookup = await AndroidAppIconProvider
+                .LookupAsync(packageName, cancellationToken)
+                .ConfigureAwait(true);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (lookup == null || !lookup.Success || lookup.IconBytes == null || lookup.IconBytes.Length == 0)
+            {
+                return AssignmentAttemptResult.Fail(lookup != null && !string.IsNullOrWhiteSpace(lookup.ErrorMessage)
+                    ? lookup.ErrorMessage
+                    : "Android app icon could not be retrieved.");
+            }
+
+            PwDatabase database = expectedDatabase ?? (host != null ? host.Database : null);
+            if (database == null || !database.IsOpen)
+            {
+                return AssignmentAttemptResult.Fail("No open KeePass database.");
+            }
+
+            ReportStatus(onStatus, "Assigning normalized Android app icon...");
+            AssignmentExecutionResult assignedResult = await ExecuteAssignNormalizedPngAsync(
+                database,
+                targetEntry,
+                lookup.IconBytes,
+                cancellationToken).ConfigureAwait(true);
+
+            if (!suppressEntrySelectionRefresh)
+            {
+                RefreshEntryListIcons(targetEntry);
+            }
+
+            ReportStatus(onStatus, "Android app icon assigned.");
+            return AssignmentAttemptResult.SuccessResult(assignedResult.NormalizedPng);
+        }
+
+        private static async System.Threading.Tasks.Task<AssignmentExecutionResult> ExecuteAssignNormalizedPngAsync(
+            PwDatabase database,
+            PwEntry selectedEntry,
+            byte[] normalizedPng,
+            CancellationToken cancellationToken)
+        {
+            return await System.Threading.Tasks.Task.Run(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (normalizedPng == null || normalizedPng.Length == 0)
+                {
+                    throw new InvalidOperationException("Normalized Android app icon is empty.");
+                }
+
+                PwUuid assignedUuid = KeePassIconAssigner.AssignNormalizedPngToEntry(database, selectedEntry, normalizedPng);
+                cancellationToken.ThrowIfCancellationRequested();
                 return new AssignmentExecutionResult
                 {
                     NormalizedPng = normalizedPng,
