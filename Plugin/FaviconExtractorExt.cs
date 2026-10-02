@@ -998,6 +998,32 @@ namespace FaviconExtractor
                     .RunAsync(CancellationToken.None, diagnosticsForm.AppendLineSafe)
                     .ConfigureAwait(true);
 
+                const string diagnosticAndroidPackage = "com.google.android.youtube";
+                diagnosticsForm.AppendLineSafe(string.Empty);
+                diagnosticsForm.AppendLineSafe("Testing Android app icon lookup for " + diagnosticAndroidPackage + "...");
+                try
+                {
+                    AndroidAppIconProvider.LookupResult androidResult = await AndroidAppIconProvider
+                        .LookupAsync(diagnosticAndroidPackage, CancellationToken.None)
+                        .ConfigureAwait(true);
+
+                    if (androidResult != null && androidResult.Success)
+                    {
+                        diagnosticsForm.AppendLineSafe("Android app icon lookup succeeded.");
+                    }
+                    else
+                    {
+                        diagnosticsForm.AppendLineSafe("Android app icon lookup failed: "
+                            + (androidResult != null && !string.IsNullOrWhiteSpace(androidResult.ErrorMessage)
+                                ? androidResult.ErrorMessage
+                                : "No icon was returned."));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    diagnosticsForm.AppendLineSafe("Android app icon lookup failed with exception: " + ex.Message);
+                }
+
                 diagnosticsForm.MarkCompleted();
             }
             catch (Exception ex)
