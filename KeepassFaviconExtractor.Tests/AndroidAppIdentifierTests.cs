@@ -14,6 +14,7 @@ namespace KeepassFaviconExtractor.Tests
             bool found = AndroidAppIdentifier.TryGetPackage(
                 "androidapp://com.url.app",
                 "androidapp://com.field.app",
+                null,
                 out package);
 
             Assert.IsTrue(found);
@@ -28,6 +29,7 @@ namespace KeepassFaviconExtractor.Tests
             bool found = AndroidAppIdentifier.TryGetPackage(
                 string.Empty,
                 "androidapp://tr.gov.saglik.enabiz",
+                null,
                 out package);
 
             Assert.IsTrue(found);
@@ -53,10 +55,26 @@ namespace KeepassFaviconExtractor.Tests
             bool found = AndroidAppIdentifier.TryGetPackage(
                 "https://example.com",
                 "androidapp://com.field.app",
+                null,
                 out package);
 
             Assert.IsFalse(found);
             Assert.IsNull(package);
+        }
+
+        [TestMethod]
+        public void TryGetPackage_UsesAndroidAppWhenAndroidApp1IsMissing()
+        {
+            string package;
+
+            bool found = AndroidAppIdentifier.TryGetPackage(
+                string.Empty,
+                null,
+                "androidapp://com.legacy.app",
+                out package);
+
+            Assert.IsTrue(found);
+            Assert.AreEqual("com.legacy.app", package);
         }
 
         [TestMethod]

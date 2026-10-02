@@ -789,6 +789,7 @@ namespace FaviconExtractor
             return AndroidAppIdentifier.TryGetPackage(
                 entryUrl,
                 entry == null ? null : entry.Strings.ReadSafe("AndroidApp1"),
+                entry == null ? null : entry.Strings.ReadSafe("AndroidApp"),
                 out packageName);
         }
 

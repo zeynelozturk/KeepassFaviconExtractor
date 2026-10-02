@@ -13,7 +13,7 @@ namespace FaviconExtractor.Networking
     public static class AndroidAppIconProvider
     {
         private const int MaxAttempts = 3;
-        private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(4);
         private static readonly HttpClient httpClient = new HttpClient
         {
             Timeout = RequestTimeout

@@ -6,7 +6,7 @@ namespace FaviconExtractor.Networking
     {
         private const string Prefix = "androidapp://";
 
-        public static bool TryGetPackage(string urlValue, string androidAppFieldValue, out string packageName)
+        public static bool TryGetPackage(string urlValue, string androidApp1Value, string androidAppValue, out string packageName)
         {
             packageName = null;
 
@@ -15,7 +15,12 @@ namespace FaviconExtractor.Networking
                 return TryParse(urlValue, out packageName);
             }
 
-            return TryParse(androidAppFieldValue, out packageName);
+            if (TryParse(androidApp1Value, out packageName))
+            {
+                return true;
+            }
+
+            return TryParse(androidAppValue, out packageName);
         }
 
         public static bool TryParse(string value, out string packageName)
