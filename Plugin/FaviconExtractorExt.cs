@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using FaviconExtractor.Networking;
 using KeePass.Plugins;
 using KeePassLib;
 
@@ -60,6 +61,7 @@ namespace FaviconExtractor
                 root.DropDownItems.Add(CreateMenuItem("Extract website favicon", OnExtractFaviconClick));
                 root.DropDownItems.Add(CreateMenuItem("Download missing database favicons...", OnDownloadMissingFaviconsClick));
                 root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
+                root.DropDownItems.Add(CreateMenuItem("Test Android App Icon Lookup", OnTestAndroidAppIconLookupClick));
                 return root;
             }
 
@@ -97,6 +99,95 @@ namespace FaviconExtractor
             if (cts != null && !cts.IsCancellationRequested)
             {
                 cts.Cancel();
+            }
+        }
+
+        private async void OnTestAndroidAppIconLookupClick(object sender, EventArgs e)
+        {
+            if (host == null || host.MainWindow == null)
+            {
+                return;
+            }
+
+            Form owner = host.MainWindow as Form;
+            using (var dialog = new PackageNameDialog())
+            {
+                dialog.PositionNearOwner(owner);
+                if (dialog.ShowDialog(owner) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                string package = dialog.PackageName?.Trim();
+                if (string.IsNullOrWhiteSpace(package))
+                {
+                    return;
+                }
+
+                DiagnosticsProgressForm diagnostics = new DiagnosticsProgressForm();
+                Icon windowIcon = GetDialogIcon();
+                if (windowIcon != null)
+                {
+                    diagnostics.Icon = windowIcon;
+                    diagnostics.ShowIcon = true;
+                }
+
+                diagnostics.PositionNearOwner(owner);
+                diagnostics.Show(owner);
+                diagnostics.AppendLineSafe("Starting Android app icon lookup for: " + package);
+
+                try
+                {
+                    AndroidAppIconProvider.LookupResult result = await AndroidAppIconProvider.LookupAsync(package).ConfigureAwait(true);
+                    diagnostics.AppendLineSafe("Package: " + package);
+                    diagnostics.AppendLineSafe("Source URL: " + (result != null && !string.IsNullOrWhiteSpace(result.SourceUrl) ? result.SourceUrl : "(none)"));
+
+                    if (result == null)
+                    {
+                        diagnostics.AppendLineSafe("Lookup returned no result.");
+                        using (var form = new AndroidAppIconTestForm())
+                        {
+                            form.SetResult(package, null, null, "Lookup returned no result.");
+                            form.ShowDialog(owner);
+                        }
+
+                        diagnostics.MarkFailed("No result.");
+                        return;
+                    }
+
+                    if (result.Success)
+                    {
+                        diagnostics.AppendLineSafe("Icon retrieved successfully.");
+                        using (var form = new AndroidAppIconTestForm())
+                        {
+                            form.SetResult(package, result.SourceUrl, result.Icon, null);
+                            form.ShowDialog(owner);
+                        }
+
+                        diagnostics.MarkCompleted();
+                        return;
+                    }
+
+                    diagnostics.AppendLineSafe("Lookup failed: " + (result.ErrorMessage ?? "Unknown error"));
+                    using (var form = new AndroidAppIconTestForm())
+                    {
+                        form.SetResult(package, result.SourceUrl, null, result.ErrorMessage ?? "No icon could be retrieved.");
+                        form.ShowDialog(owner);
+                    }
+
+                    diagnostics.MarkFailed(result.ErrorMessage ?? "Lookup failed.");
+                }
+                catch (Exception ex)
+                {
+                    diagnostics.AppendLineSafe("Exception: " + ex.Message);
+                    using (var form = new AndroidAppIconTestForm())
+                    {
+                        form.SetResult(package, null, null, ex.Message);
+                        form.ShowDialog(owner);
+                    }
+
+                    diagnostics.MarkFailed(ex.Message);
+                }
             }
         }
 
@@ -144,6 +235,79 @@ namespace FaviconExtractor
             }
             item.Click += onClick;
             return item;
+        }
+
+        private sealed class PackageNameDialog : Form
+        {
+            private readonly TextBox packageTextBox;
+
+            public string PackageName
+            {
+                get { return packageTextBox.Text; }
+            }
+
+            public PackageNameDialog()
+            {
+                Text = "Android package name";
+                Width = 460;
+                Height = 140;
+                StartPosition = FormStartPosition.CenterParent;
+                FormBorderStyle = FormBorderStyle.FixedDialog;
+                MaximizeBox = false;
+                MinimizeBox = false;
+
+                Label promptLabel = new Label
+                {
+                    Text = "Enter Android package name (e.g. com.patreon.android):",
+                    AutoSize = true,
+                    Location = new System.Drawing.Point(12, 12)
+                };
+
+                packageTextBox = new TextBox
+                {
+                    Location = new System.Drawing.Point(12, 36),
+                    Width = 416
+                };
+
+                Button okButton = new Button
+                {
+                    Text = "OK",
+                    DialogResult = DialogResult.OK,
+                    Location = new System.Drawing.Point(272, 68),
+                    Width = 75
+                };
+
+                Button cancelButton = new Button
+                {
+                    Text = "Cancel",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new System.Drawing.Point(353, 68),
+                    Width = 75
+                };
+
+                Controls.Add(promptLabel);
+                Controls.Add(packageTextBox);
+                Controls.Add(okButton);
+                Controls.Add(cancelButton);
+
+                AcceptButton = okButton;
+                CancelButton = cancelButton;
+            }
+
+            public void PositionNearOwner(Form owner)
+            {
+                if (owner == null)
+                {
+                    StartPosition = FormStartPosition.CenterScreen;
+                    return;
+                }
+
+                int x = owner.Left + ((owner.Width - Width) / 2);
+                int y = owner.Top + ((owner.Height - Height) / 2);
+                if (x < 0) x = 0;
+                if (y < 0) y = 0;
+                Location = new System.Drawing.Point(x, y);
+            }
         }
 
         private Image menuIcon;
