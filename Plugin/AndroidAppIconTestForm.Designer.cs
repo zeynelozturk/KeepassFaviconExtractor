@@ -23,6 +23,12 @@ namespace FaviconExtractor
         {
             if (disposing && (components != null))
             {
+                if (picIcon != null && picIcon.Image != null)
+                {
+                    picIcon.Image.Dispose();
+                    picIcon.Image = null;
+                }
+
                 components.Dispose();
             }
             base.Dispose(disposing);

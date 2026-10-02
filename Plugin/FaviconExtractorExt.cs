@@ -159,8 +159,10 @@ namespace FaviconExtractor
                     {
                         diagnostics.AppendLineSafe("Icon retrieved successfully.");
                         using (var form = new AndroidAppIconTestForm())
+                        using (var stream = new MemoryStream(result.IconBytes))
+                        using (var preview = Image.FromStream(stream))
                         {
-                            form.SetResult(package, result.SourceUrl, result.Icon, null);
+                            form.SetResult(package, result.SourceUrl, preview, null);
                             form.ShowDialog(owner);
                         }
 
@@ -191,6 +193,22 @@ namespace FaviconExtractor
             }
         }
 
+        private static void CloseStatusFormSafe(Form form)
+        {
+            if (form == null || form.IsDisposed)
+            {
+                return;
+            }
+
+            if (form.InvokeRequired)
+            {
+                form.BeginInvoke(new Action<Form>(CloseStatusFormSafe), form);
+                return;
+            }
+
+            form.Close();
+        }
+
         private void RegisterActiveStatusForm(ExtractionStatusForm statusForm)
         {
             lock (extractRunSync)
@@ -208,22 +226,6 @@ namespace FaviconExtractor
                     activeExtractionStatusForm = null;
                 }
             }
-        }
-
-        private static void CloseStatusFormSafe(Form form)
-        {
-            if (form == null || form.IsDisposed)
-            {
-                return;
-            }
-
-            if (form.InvokeRequired)
-            {
-                form.BeginInvoke(new Action<Form>(CloseStatusFormSafe), form);
-                return;
-            }
-
-            form.Close();
         }
 
         private ToolStripMenuItem CreateMenuItem(string text, EventHandler onClick, Image icon = null)
