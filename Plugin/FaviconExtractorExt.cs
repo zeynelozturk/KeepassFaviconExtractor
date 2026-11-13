@@ -363,6 +363,7 @@ namespace FaviconExtractor
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { if (!form.IsDisposed) form.SetStatus("Search failed: " + ex.Message + " Available icons can still be used."); }
+            finally { if (!form.IsDisposed) form.StopSearchProgress(); }
         }
 
         private async void OnExtractFaviconClick(object sender, EventArgs e)
@@ -2353,6 +2354,7 @@ namespace FaviconExtractor
             private readonly Button retryButton;
             private readonly Button closeButton;
             private readonly Button chooseButton;
+            private readonly ProgressBar extractionProgressBar;
             private readonly ContextMenuStrip outputContextMenu;
             private readonly System.Windows.Forms.Timer closeCountdownTimer;
             private Action cancelAction;
@@ -2496,7 +2498,12 @@ namespace FaviconExtractor
                 closeCountdownTimer.Tick += OnCloseCountdownTick;
                 isInProgress = true;
 
+                extractionProgressBar = new ProgressBar { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee,
+                    MarqueeAnimationSpeed = 30, TabStop = false };
+                var loadingPanel = new Panel { Dock = DockStyle.Bottom, Height = 12, Padding = new Padding(8, 2, 8, 4) };
+                loadingPanel.Controls.Add(extractionProgressBar);
                 Controls.Add(contentPanel);
+                Controls.Add(loadingPanel);
                 Controls.Add(buttonPanel);
 
                 WireAutoCloseCancellationOnClick(this);
@@ -2580,6 +2587,8 @@ namespace FaviconExtractor
                 chooseAction = null;
                 chooseButton.Enabled = false;
                 ClearPreviewImage();
+                extractionProgressBar.MarqueeAnimationSpeed = 30;
+                extractionProgressBar.Visible = true;
                 pendingAutoClose = false;
                 isOutputContextMenuOpen = false;
                 cancelButton.Enabled = true;
@@ -2657,6 +2666,8 @@ namespace FaviconExtractor
                 isInProgress = false;
 
                 countdownSeconds = seconds;
+                extractionProgressBar.MarqueeAnimationSpeed = 0;
+                extractionProgressBar.Visible = false;
                 UpdateCloseButtonCountdownText();
 
                 if (countdownSeconds == 0)
@@ -2703,6 +2714,8 @@ namespace FaviconExtractor
                 retryButton.Visible = showRetry;
                 retryButton.Enabled = showRetry;
                 isInProgress = false;
+                extractionProgressBar.MarqueeAnimationSpeed = 0;
+                extractionProgressBar.Visible = false;
             }
 
             private void OnCancelClick(object sender, EventArgs e)

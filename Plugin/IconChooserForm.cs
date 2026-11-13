@@ -15,6 +15,7 @@ namespace FaviconExtractor
         private readonly PictureBox selectedPreview;
         private readonly Label details;
         private readonly Label status;
+        private readonly ProgressBar searchProgressBar;
         private readonly Button useButton;
         private readonly Button cancelButton;
         private readonly string currentKey;
@@ -31,8 +32,8 @@ namespace FaviconExtractor
             currentKey = currentContentKey;
             Text = "Choose another icon";
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(760, 554);
-            MinimumSize = new Size(650, 594);
+            ClientSize = new Size(760, 566);
+            MinimumSize = new Size(650, 606);
             StartPosition = FormStartPosition.CenterParent;
             MinimizeBox = false;
 
@@ -41,7 +42,7 @@ namespace FaviconExtractor
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var heading = new Label { Text = string.IsNullOrWhiteSpace(title) ? "(untitled)" : title, Dock = DockStyle.Fill, AutoEllipsis = true };
             layout.Controls.Add(heading, 0, 0);
@@ -81,8 +82,16 @@ namespace FaviconExtractor
             previewViewport.Controls.Add(previews);
             layout.Controls.Add(previewViewport, 1, 1);
             status = new Label { Text = "Searching for icons…", Dock = DockStyle.Fill, AutoEllipsis = true };
-            layout.Controls.Add(status, 0, 2);
-            layout.SetColumnSpan(status, 2);
+            searchProgressBar = new ProgressBar { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee,
+                MarqueeAnimationSpeed = 30, TabStop = false, Margin = new Padding(0, 0, 0, 6) };
+            var searchStatus = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+            searchStatus.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            searchStatus.RowStyles.Add(new RowStyle(SizeType.Absolute, 12));
+            searchStatus.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            searchStatus.Controls.Add(searchProgressBar, 0, 0);
+            searchStatus.Controls.Add(status, 0, 1);
+            layout.Controls.Add(searchStatus, 0, 2);
+            layout.SetColumnSpan(searchStatus, 2);
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
@@ -94,6 +103,7 @@ namespace FaviconExtractor
                 PreparedIcon selected = GetSelected();
                 if (selected == null || selected.ContentKey == currentKey) return;
                 applying = true;
+                StopSearchProgress();
                 useButton.Enabled = false;
                 cancelButton.Enabled = false;
                 candidates.Enabled = false;
@@ -146,6 +156,7 @@ namespace FaviconExtractor
         public void CompleteSearch(AlternativeIconSearchResult result)
         {
             if (IsDisposed || applying) return;
+            StopSearchProgress();
             bool hasAlternative = results.Exists(r => r.ContentKey != currentKey);
             status.Text = hasAlternative
                 ? results.Count + " distinct icons found. Select one, then choose Use selected icon."
@@ -157,6 +168,13 @@ namespace FaviconExtractor
         private PreparedIcon GetSelected()
         {
             return candidates.SelectedIndices.Count == 1 ? results[candidates.SelectedIndices[0]] : null;
+        }
+
+        public void StopSearchProgress()
+        {
+            if (IsDisposed) return;
+            searchProgressBar.MarqueeAnimationSpeed = 0;
+            searchProgressBar.Visible = false;
         }
 
         private void UpdateSelection()
@@ -190,6 +208,7 @@ namespace FaviconExtractor
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            StopSearchProgress();
             completion.TrySetResult(null);
             base.OnFormClosed(e);
         }
