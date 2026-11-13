@@ -1,5 +1,7 @@
 <Project>
 	<PropertyGroup>
+	<OpenDistAfterBuild Condition="'$(OpenDistAfterBuild)' == ''">true</OpenDistAfterBuild>
+	<_FaviconDistDirectory>$(MSBuildThisFileDirectory)dist</_FaviconDistDirectory>
 	<FaviconExtractorMSTestAdapterVersion Condition="'$(FaviconExtractorMSTestAdapterVersion)' == ''">2.2.10</FaviconExtractorMSTestAdapterVersion>
 	<FaviconExtractorMSTestAdapterPath Condition="'$(FaviconExtractorMSTestAdapterPath)' == ''">$(MSBuildThisFileDirectory)packages\MSTest.TestAdapter.$(FaviconExtractorMSTestAdapterVersion)\build\_common</FaviconExtractorMSTestAdapterPath>
   </PropertyGroup>

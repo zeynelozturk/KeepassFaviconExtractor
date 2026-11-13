@@ -43,6 +43,13 @@
 	<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\build-release.ps1&quot; -Configuration $(Configuration) -SkipBuild -KeePassExePath &quot;$(KeePassDir)\KeePass.exe&quot;" />
   </Target>
 
+  <Target Name="OpenDistFolderAfterPackaging"
+		  AfterTargets="PackagePluginArtifacts"
+		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor' and '$(Configuration)' == 'Release' and '$(PackagePluginOnBuild)' == 'true' and '$(BuildingInsideVisualStudio)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(OpenDistAfterBuild)' == 'true' and '$(CI)' != 'true' and '$(ContinuousIntegrationBuild)' != 'true' and Exists('$(_FaviconDistDirectory)')">
+	<Message Importance="high" Text="Opening dist in Explorer after Release packaging. Debug and command-line builds do not open this folder." />
+	<Exec Command="explorer.exe &quot;$(_FaviconDistDirectory)&quot;" IgnoreExitCode="true" ContinueOnError="WarnAndContinue" />
+  </Target>
+
   <Target Name="WarnWhenUpdateTxtVersionDiffersFromAssemblyVersion"
 		  AfterTargets="Build"
 		  Condition="'$(MSBuildProjectName)' == 'KeepassFaviconExtractor' and '$(Configuration)' == 'Release' and '$(DesignTimeBuild)' != 'true'">

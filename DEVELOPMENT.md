@@ -107,6 +107,14 @@ Disable packaging for a specific Release build when needed:
 msbuild .\KeepassFaviconExtractor.csproj /p:Configuration=Release /p:PackagePluginOnBuild=false
 ```
 
+After successful Release packaging started inside Visual Studio, `dist` opens automatically
+in Explorer. There is no confirmation dialog. Debug, design-time, command-line, and CI builds
+do not open Explorer. This happens when the plugin project finishes packaging; other projects
+in a solution, including the test project, may still be building.
+
+To disable automatic opening, set `OpenDistAfterBuild=false` in a local `.csproj.user` file
+or pass `/p:OpenDistAfterBuild=false` when invoking MSBuild.
+
 ## Optional: fail Build when tests fail
 
 You can run tests as part of Build and fail the build on test failures using `RunOnBuild`.
