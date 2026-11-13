@@ -231,6 +231,30 @@ namespace FaviconExtractor
         }
 
         [TestMethod]
+        public void Chooser_ModelessWindowCentersOverItsOwner()
+        {
+            Sta(() =>
+            {
+                using (var owner = new Form { StartPosition = FormStartPosition.Manual,
+                    Bounds = Screen.PrimaryScreen.WorkingArea, ShowInTaskbar = false, Opacity = 0 })
+                using (var form = new IconChooserForm("Example website", null, null)
+                    { ShowInTaskbar = false, Opacity = 0 })
+                {
+                    owner.Show();
+                    form.Show(owner);
+                    Application.DoEvents();
+                    Rectangle area = Screen.FromControl(owner).WorkingArea;
+                    int expectedX = Math.Max(area.Left, Math.Min(owner.Left + (owner.Width - form.Width) / 2, area.Right - form.Width));
+                    int expectedY = Math.Max(area.Top, Math.Min(owner.Top + (owner.Height - form.Height) / 2, area.Bottom - form.Height));
+                    Assert.IsTrue(Math.Abs(form.Left - expectedX) <= 2, "Chooser must be horizontally centered over its owner");
+                    Assert.IsTrue(Math.Abs(form.Top - expectedY) <= 2, "Chooser must be vertically centered over its owner");
+                    form.Abort();
+                    owner.Close();
+                }
+            });
+        }
+
+        [TestMethod]
         public void Chooser_LayoutFitsAtEnlargedScaling()
         {
             Sta(() =>
@@ -266,6 +290,18 @@ namespace FaviconExtractor
                             capture.Save(Path.Combine(qaDirectory, "chooser-" + (int)(scale * 100) + ".png"), ImageFormat.Png);
                         }
                     }
+                    Size previewSize = Field<PictureBox>(form, "selectedPreview").Size;
+                    Assert.AreEqual(previewSize, Field<PictureBox>(form, "currentPreview").Size);
+                    // A shorter viewport must scroll to the full metadata, rather than clipping it
+                    // or shrinking either preview to make room.
+                    form.MinimumSize = new Size(400, 300);
+                    form.Height = 380;
+                    Application.DoEvents();
+                    var viewport = (Panel)details.Parent.Parent;
+                    Assert.IsTrue(viewport.VerticalScroll.Visible, "Short preview columns must scroll");
+                    Assert.IsTrue(details.Height >= details.PreferredHeight, "Metadata must retain its full height when scrolling");
+                    Assert.AreEqual(previewSize, Field<PictureBox>(form, "selectedPreview").Size);
+                    Assert.AreEqual(previewSize, Field<PictureBox>(form, "currentPreview").Size);
                     form.Abort();
                 }
             });
@@ -302,6 +338,9 @@ namespace FaviconExtractor
                 var type = typeof(FaviconExtractorExt).GetNestedType("ExtractionStatusForm", BindingFlags.NonPublic);
                 using (var form = (Form)Activator.CreateInstance(type, true))
                 {
+                    var searchButton = Field<Button>(form, "chooseButton");
+                    Assert.AreEqual("Look for other icons…", searchButton.Text);
+                    Assert.IsFalse(searchButton.Enabled);
                     bool invoked = false;
                     Action action = () =>
                     {
@@ -309,10 +348,13 @@ namespace FaviconExtractor
                         invoked = true;
                     };
                     type.GetMethod("AttachChooseAction").Invoke(form, new object[] { action });
+                    Assert.IsTrue(searchButton.Enabled);
                     type.GetMethod("MarkCompletedWithCountdown").Invoke(form, new object[] { 3 });
                     Assert.IsTrue(Field<System.Windows.Forms.Timer>(form, "closeCountdownTimer").Enabled);
                     typeof(Button).GetMethod("OnClick", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(Field<Button>(form, "chooseButton"), new object[] { EventArgs.Empty });
                     Assert.IsTrue(invoked);
+                    type.GetMethod("BeginProgress").Invoke(form, new object[0]);
+                    Assert.IsFalse(searchButton.Enabled, "Retry must disable the search action until a new success");
                 }
             });
         }

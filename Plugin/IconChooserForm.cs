@@ -31,8 +31,8 @@ namespace FaviconExtractor
             currentKey = currentContentKey;
             Text = "Choose another icon";
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(760, 490);
-            MinimumSize = new Size(650, 530);
+            ClientSize = new Size(760, 554);
+            MinimumSize = new Size(650, 594);
             StartPosition = FormStartPosition.CenterParent;
             MinimizeBox = false;
 
@@ -53,21 +53,33 @@ namespace FaviconExtractor
             candidates.SelectedIndexChanged += (_, __) => UpdateSelection();
             layout.Controls.Add(candidates, 0, 1);
 
-            var previews = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(10, 0, 0, 0) };
+            var previewViewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            var previews = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, RowCount = 7,
+                Padding = new Padding(10, 0, 0, 0) };
+            previews.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             previews.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-            previews.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            previews.RowStyles.Add(new RowStyle(SizeType.Absolute, 134));
+            previews.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            previews.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));
             previews.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-            previews.RowStyles.Add(new RowStyle(SizeType.Absolute, 128));
-            previews.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            previews.RowStyles.Add(new RowStyle(SizeType.Absolute, 134));
+            previews.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             previews.Controls.Add(new Label { Text = "Current icon", AutoSize = true }, 0, 0);
-            currentPreview = new PictureBox { SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(64, 64), Image = currentImage };
+            currentPreview = new RoundedPictureBox { SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(128, 128), Image = currentImage };
             previews.Controls.Add(currentPreview, 0, 1);
-            previews.Controls.Add(new Label { Text = "Selected icon", AutoSize = true }, 0, 2);
-            selectedPreview = new PictureBox { SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(128, 128) };
-            previews.Controls.Add(selectedPreview, 0, 3);
-            details = new Label { Dock = DockStyle.Fill, AutoEllipsis = true };
-            previews.Controls.Add(details, 0, 4);
-            layout.Controls.Add(previews, 1, 1);
+            previews.Controls.Add(new Label
+            {
+                Text = currentImage != null ? currentImage.Width + " × " + currentImage.Height + " px" : "",
+                AutoSize = true
+            }, 0, 2);
+            previews.Controls.Add(new Label { Text = "Selected icon", AutoSize = true }, 0, 4);
+            selectedPreview = new RoundedPictureBox { SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(128, 128) };
+            previews.Controls.Add(selectedPreview, 0, 5);
+            details = new Label { Dock = DockStyle.Fill, AutoSize = true };
+            previews.Controls.Add(details, 0, 6);
+            previewViewport.Controls.Add(previews);
+            layout.Controls.Add(previewViewport, 1, 1);
             status = new Label { Text = "Searching for icons…", Dock = DockStyle.Fill, AutoEllipsis = true };
             layout.Controls.Add(status, 0, 2);
             layout.SetColumnSpan(status, 2);
@@ -95,6 +107,15 @@ namespace FaviconExtractor
             layout.Controls.Add(buttons, 0, 3);
             layout.SetColumnSpan(buttons, 2);
             Controls.Add(layout);
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            // CenterParent alone does not center this modeless owned window.
+            // Center explicitly after WinForms has applied layout and DPI scaling.
+            if (StartPosition == FormStartPosition.CenterParent && Owner != null)
+                CenterToParent();
         }
 
         public void AddResult(PreparedIcon icon)

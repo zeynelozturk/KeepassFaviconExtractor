@@ -41,8 +41,8 @@ Note that this extension will change the icon of entry without confirmation.
 We do not modify or delete previously stored icons.
 
 To choose a different icon, select one entry and open **Tools → Favicon Extractor →
-Choose another icon…**. The same option appears after a successful single-entry
-extraction; clicking it stops the result window's countdown. Select a preview,
+Choose another icon…**. The result window's **Look for other icons…** button is
+enabled after a successful single-entry website extraction; clicking it stops the countdown. Select a preview,
 then click **Use selected icon** to apply it. Cancel leaves the current icon unchanged.
 The chooser supports HTTP/HTTPS website and direct-image URLs. Android-only entries
 continue to use automatic extraction.

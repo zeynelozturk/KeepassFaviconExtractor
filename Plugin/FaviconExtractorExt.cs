@@ -383,6 +383,9 @@ namespace FaviconExtractor
             }
 
             ExtractionStatusForm statusForm = new ExtractionStatusForm();
+            PwEntry[] chooserEntries = host.MainWindow.GetSelectedEntries();
+            statusForm.SetIconSearchVisible(chooserEntries != null
+                ? chooserEntries.Length == 1 : host.MainWindow.GetSelectedEntry(false) != null);
             Icon windowIcon = GetDialogIcon();
             if (windowIcon != null)
             {
@@ -451,6 +454,7 @@ namespace FaviconExtractor
                     return;
                 }
 
+                statusForm.SetIconSearchVisible(selectedEntries.Length == 1);
                 CancellationToken cancellationToken = extractCancellationTokenSource.Token;
                 PwDatabase runDatabase = host.Database;
                 if (!TryValidateRunContext(runDatabase, out string contextReason))
@@ -2471,9 +2475,10 @@ namespace FaviconExtractor
                 retryButton.Click += OnRetryClick;
 
                 chooseButton = new Button();
-                chooseButton.Text = "Choose another icon…";
+                chooseButton.Text = "Look for other icons…";
                 chooseButton.AutoSize = true;
                 chooseButton.Visible = false;
+                chooseButton.Enabled = false;
                 chooseButton.Click += (_, __) =>
                 {
                     CancelAutoCloseCountdown();
@@ -2549,7 +2554,12 @@ namespace FaviconExtractor
             {
                 if (IsDisposed) return;
                 chooseAction = action;
-                chooseButton.Visible = action != null;
+                chooseButton.Enabled = action != null;
+            }
+
+            public void SetIconSearchVisible(bool visible)
+            {
+                chooseButton.Visible = visible;
             }
 
             public void BeginProgress()
@@ -2568,7 +2578,7 @@ namespace FaviconExtractor
                 closeCountdownTimer.Stop();
                 outputTextBox.Clear();
                 chooseAction = null;
-                chooseButton.Visible = false;
+                chooseButton.Enabled = false;
                 ClearPreviewImage();
                 pendingAutoClose = false;
                 isOutputContextMenuOpen = false;
@@ -2873,58 +2883,6 @@ namespace FaviconExtractor
                 {
                     // ignore UI clear errors
                 }
-            }
-        }
-
-        private sealed class RoundedPictureBox : PictureBox
-        {
-            private const int CornerRadius = 8;
-
-            protected override void OnPaint(PaintEventArgs pe)
-            {
-                Graphics graphics = pe.Graphics;
-                graphics.SmoothingMode = SmoothingMode.AntiAlias;
-
-                using (GraphicsPath path = CreateRoundedRectPath(ClientRectangle, CornerRadius))
-                {
-                    Region = new Region(path);
-
-                    using (SolidBrush backBrush = new SolidBrush(BackColor))
-                    {
-                        graphics.FillPath(backBrush, path);
-                    }
-
-                    if (Image != null)
-                    {
-                        Region previousClip = graphics.Clip;
-                        graphics.SetClip(path);
-                        graphics.DrawImage(Image, ClientRectangle);
-                        graphics.Clip = previousClip;
-                    }
-
-                    using (Pen borderPen = new Pen(Color.Gray, 1f))
-                    {
-                        graphics.DrawPath(borderPen, path);
-                    }
-                }
-            }
-
-            private static GraphicsPath CreateRoundedRectPath(Rectangle rect, int radius)
-            {
-                int diameter = Math.Max(1, radius * 2);
-                Rectangle arc = new Rectangle(rect.X, rect.Y, diameter, diameter);
-                GraphicsPath path = new GraphicsPath();
-
-                path.AddArc(arc, 180, 90);
-                arc.X = rect.Right - diameter;
-                path.AddArc(arc, 270, 90);
-                arc.Y = rect.Bottom - diameter;
-                path.AddArc(arc, 0, 90);
-                arc.X = rect.X;
-                path.AddArc(arc, 90, 90);
-                path.CloseFigure();
-
-                return path;
             }
         }
 
