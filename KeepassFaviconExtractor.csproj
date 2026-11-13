@@ -109,6 +109,7 @@
     <Compile Include="Networking\AndroidAppIdentifier.cs" />
     <Compile Include="Networking\NetworkSafety.cs" />
     <Compile Include="Plugin\FaviconExtractorExt.cs" />
+    <Compile Include="Plugin\FaviconWorkflowServices.cs" />
     <Compile Include="Plugin\RoundedPictureBox.cs">
       <SubType>Component</SubType>
     </Compile>

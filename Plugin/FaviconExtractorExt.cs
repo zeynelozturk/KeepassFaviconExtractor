@@ -20,6 +20,14 @@ namespace FaviconExtractor
     public sealed class FaviconExtractorExt : Plugin
     {
         private IPluginHost host;
+        private readonly FaviconWorkflowServices workflows;
+
+        public FaviconExtractorExt() : this(new FaviconWorkflowServices()) { }
+
+        internal FaviconExtractorExt(FaviconWorkflowServices workflows)
+        {
+            this.workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+        }
         private bool isExtractRunning;
         private CancellationTokenSource extractCancellationTokenSource;
         private Icon dialogIcon;
@@ -349,14 +357,14 @@ namespace FaviconExtractor
             }
         }
 
-        private static async Task RunChooserSearchAsync(IconChooserForm form, string url, bool directImage, CancellationToken token)
+        private async Task RunChooserSearchAsync(IconChooserForm form, string url, bool directImage, CancellationToken token)
         {
             // Progress captures the KeePass UI context and guards against queued callbacks after close.
             var icons = new Progress<PreparedIcon>(icon => { if (!form.IsDisposed && !token.IsCancellationRequested) form.AddResult(icon); });
             var status = new Progress<string>(line => { if (!form.IsDisposed && !token.IsCancellationRequested) form.SetStatus(line); });
             try
             {
-                var result = await Task.Run(() => AlternativeIconSearch.SearchAsync(url, directImage,
+                var result = await Task.Run(() => workflows.SearchAlternatives(url, directImage,
                     icon => ((IProgress<PreparedIcon>)icons).Report(icon),
                     line => ((IProgress<string>)status).Report(line), token), token);
                 if (!form.IsDisposed && !token.IsCancellationRequested) form.CompleteSearch(result);
@@ -1012,8 +1020,7 @@ namespace FaviconExtractor
             else
             {
                 onStatus?.Invoke("Searching icon candidates...");
-                result = await FaviconDiscoveryService
-                    .DiscoverAsync(entryUrl, cancellationToken, onStatus)
+                result = await workflows.Discover(entryUrl, cancellationToken, onStatus)
                     .ConfigureAwait(true);
             }
 
@@ -1329,8 +1336,7 @@ namespace FaviconExtractor
 
                     Stopwatch downloadStopwatch = Stopwatch.StartNew();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " downloading...");
-                    byte[] sourceBytes = await CandidatePreparation
-                        .DownloadAsync(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
+                    byte[] sourceBytes = await workflows.Download(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
                         .ConfigureAwait(true);
                     downloadStopwatch.Stop();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
@@ -1450,8 +1456,7 @@ namespace FaviconExtractor
 
                                 Stopwatch downloadStopwatch = Stopwatch.StartNew();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " downloading...");
-                                byte[] sourceBytes = await CandidatePreparation
-                                    .DownloadAsync(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
+                                byte[] sourceBytes = await workflows.Download(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
                                     .ConfigureAwait(true);
                                 downloadStopwatch.Stop();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
@@ -1575,8 +1580,7 @@ namespace FaviconExtractor
 
                             Stopwatch downloadStopwatch = Stopwatch.StartNew();
                             ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " downloading...");
-                            byte[] sourceBytes = await CandidatePreparation
-                                .DownloadAsync(candidate.IconUri, cancellationToken)
+                            byte[] sourceBytes = await workflows.Download(candidate.IconUri, cancellationToken, false)
                                 .ConfigureAwait(true);
                             downloadStopwatch.Stop();
                             ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " download completed (" + downloadStopwatch.ElapsedMilliseconds + "ms).");
@@ -1786,7 +1790,7 @@ namespace FaviconExtractor
             return highestFailedScoreBeforeAssignment > assignedCandidate.Score;
         }
 
-        private static async System.Threading.Tasks.Task<List<FaviconCandidate>> TryDiscoverExternalRescueCandidatesAsync(Uri pageUri, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
+        private async System.Threading.Tasks.Task<List<FaviconCandidate>> TryDiscoverExternalRescueCandidatesAsync(Uri pageUri, CancellationToken cancellationToken, StringBuilder sb, Action<string> onStatus)
         {
             if (pageUri == null)
             {
@@ -1798,8 +1802,7 @@ namespace FaviconExtractor
                 using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(6)))
                 using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
                 {
-                    List<FaviconCandidate> externalCandidates = await ExternalFaviconServiceDiscoverer
-                        .DiscoverAsync(pageUri, cts.Token)
+                    List<FaviconCandidate> externalCandidates = await workflows.DiscoverRescue(pageUri, cts.Token)
                         .ConfigureAwait(false);
 
                     return externalCandidates ?? new List<FaviconCandidate>();
@@ -1856,6 +1859,11 @@ namespace FaviconExtractor
 
         private void RefreshEntryListIcons(PwEntry selectedEntry)
         {
+            if (workflows.RefreshIcons != null)
+            {
+                workflows.RefreshIcons(selectedEntry);
+                return;
+            }
             if (host == null || host.MainWindow == null)
             {
                 return;

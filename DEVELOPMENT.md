@@ -126,6 +126,22 @@ Visual Studio UI builds can use the same flag by setting it in `Directory.Build.
 Default is `true` for `Release` and `false` for non-Release configurations.
 You can still override it explicitly with `/p:RunOnBuild=true|false`.
 
+### Workflow regression coverage
+
+`WorkflowRegressionTests` runs the plugin's chooser and automatic extraction workflows
+against in-memory KeePass databases and an isolated, unshown KeePass main form. Network
+responses are supplied through per-instance `FaviconWorkflowServices`; tests do not contact
+website providers or open the user's password database. Normalization and icon assignment
+use the real production implementations.
+
+The tests exercise WinForms controls automatically, including selection, Apply, Cancel,
+Retry, candidate fallback/rescue, mixed selection batches, cancellation, late callbacks,
+and operation cleanup. These tests require Windows with WinForms support.
+
+The database-closing test delivers KeePass 2.61's actual event arguments to the plugin's
+handler. It verifies the plugin's response, not the KeePass lock command itself. Keep a
+manual smoke test in KeePass for actual lock/unlock and plugin loading.
+
 MSTest adapter resolution for build-time execution is centralized in `Directory.Build.props`:
 
 - `FaviconExtractorMSTestAdapterVersion` (currently `2.2.10`)

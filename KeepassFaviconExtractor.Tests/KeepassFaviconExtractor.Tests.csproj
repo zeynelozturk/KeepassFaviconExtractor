@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="IconNormalizerTests.cs" />
     <Compile Include="IconChooserTests.cs" />
+    <Compile Include="WorkflowRegressionTests.cs" />
     <Compile Include="AndroidAppIdentifierTests.cs" />
     <Compile Include="NetworkSafetyTests.cs" />
   </ItemGroup>
