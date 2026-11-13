@@ -16,6 +16,7 @@ uses multiple discovery methods, therefore it has a higher likelihood of finding
 - 128x128 is the default size. Smaller icons aren't upscaled, but larger icons are downscaled to 128x128.
 - Live extraction status and diagnostics windows.
 - Multiple selection support for batch extraction.
+- Optional icon chooser for a single website entry, with previews of distinct alternatives.
 - "Download missing icons" feature for eligible entries in a database.
 - Guard against storing duplicate icons in the KeePass database.
 - Diagnostics window allows you to check if extension is working properly.
@@ -39,11 +40,20 @@ Note that this extension will change the icon of entry without confirmation.
 
 We do not modify or delete previously stored icons.
 
+To choose a different icon, select one entry and open **Tools → Favicon Extractor →
+Choose another icon…**. The same option appears after a successful single-entry
+extraction; clicking it stops the result window's countdown. Select a preview,
+then click **Use selected icon** to apply it. Cancel leaves the current icon unchanged.
+The chooser supports HTTP/HTTPS website and direct-image URLs. Android-only entries
+continue to use automatic extraction.
+
 ## Network and privacy behavior
 
 - The plugin makes outbound HTTP/HTTPS requests to the target site's URL to discover icons.
 - If direct discovery fails, it may query external providers (for example Google, DuckDuckGo,
   Favicone, Vemetric, Favicon.im, and Hunter logo endpoint).
+- The optional chooser also checks these existing providers when website icons are found,
+  to look for alternatives.
 - External providers receive host/domain-based values (host and sometimes parent domain),
   not the full entry URL path/query.
 - Redirects that end on private or loopback addresses can be blocked with

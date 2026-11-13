@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using FaviconExtractor.Networking;
 using KeePass.Plugins;
@@ -24,6 +25,7 @@ namespace FaviconExtractor
         private Icon dialogIcon;
         private readonly object extractRunSync = new object();
         private ExtractionStatusForm activeExtractionStatusForm;
+        private IconChooserForm activeIconChooser;
         private volatile bool isShuttingDown;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -51,6 +53,7 @@ namespace FaviconExtractor
             if (type == PluginMenuType.Main)
             {
                 ToolStripMenuItem root = new ToolStripMenuItem("Favicon Extractor");
+                root.DropDown.ShowItemToolTips = true;
                 // set small icon from Assets (if available)
                 Image icon = LoadMenuIcon();
                 if (icon != null)
@@ -59,6 +62,16 @@ namespace FaviconExtractor
                 }
 
                 root.DropDownItems.Add(CreateMenuItem("Extract website favicon", OnExtractFaviconClick));
+                ToolStripMenuItem chooseItem = CreateMenuItem("Choose another icon…", OnChooseAnotherIconClick);
+                root.DropDownItems.Add(chooseItem);
+                root.DropDownOpening += (_, __) =>
+                {
+                    PwEntry[] entries = host != null ? host.MainWindow.GetSelectedEntries() : null;
+                    string reason;
+                    chooseItem.Enabled = !isExtractRunning && !isShuttingDown && entries != null && entries.Length == 1
+                        && CanChooseIcon(entries[0].Strings.ReadSafe(PwDefs.UrlField), out reason);
+                    chooseItem.ToolTipText = "Select one entry with an HTTP/HTTPS website or image URL. Android-only entries use automatic extraction.";
+                };
                 root.DropDownItems.Add(CreateMenuItem("Download missing database favicons...", OnDownloadMissingFaviconsClick));
                 root.DropDownItems.Add(CreateMenuItem("Diagnostics", OnDiagnosticsMenuItemClick));
                 return root;
@@ -76,6 +89,7 @@ namespace FaviconExtractor
         {
             isShuttingDown = true;
             RequestExtractionCancel();
+            if (activeIconChooser != null) activeIconChooser.Abort();
 
             ExtractionStatusForm statusForm = null;
             lock (extractRunSync)
@@ -216,6 +230,139 @@ namespace FaviconExtractor
             }
 
             return null;
+        }
+
+        private static bool CanChooseIcon(string url, out string reason)
+        {
+            Uri uri;
+            bool valid = Uri.TryCreate(url, UriKind.Absolute, out uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+            reason = valid ? null : "Choose another icon requires an HTTP/HTTPS website or image URL. Android-only entries use automatic extraction.";
+            return valid;
+        }
+
+        private async void OnChooseAnotherIconClick(object sender, EventArgs e)
+        {
+            if (host == null || isShuttingDown) return;
+            var entries = host.MainWindow.GetSelectedEntries();
+            if (entries == null || entries.Length != 1)
+            {
+                MessageBox.Show(host.MainWindow, "Select exactly one entry first.", "Favicon Extractor");
+                return;
+            }
+            await RunIconChooserAsync(host.Database, entries[0], entries[0].Strings.ReadSafe(PwDefs.UrlField));
+        }
+
+        private async Task RunIconChooserAsync(PwDatabase database, PwEntry entry, string url)
+        {
+            if (host == null || isShuttingDown) return;
+            var mainWindow = host.MainWindow;
+            string reason;
+            if (isExtractRunning)
+            {
+                MessageBox.Show(mainWindow, "A favicon operation is already running.", "Favicon Extractor");
+                return;
+            }
+            if (!CanChooseIcon(url, out reason) || !TryValidateRunContext(database, out reason))
+            {
+                MessageBox.Show(mainWindow, reason, "Favicon Extractor");
+                return;
+            }
+
+            isExtractRunning = true;
+            using (var lifetime = new CancellationTokenSource())
+            using (var searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
+            {
+                extractCancellationTokenSource = lifetime;
+                IconChooserForm form = null;
+                Task searchTask = Task.FromResult(0);
+                object assignmentSync = new object();
+                EventHandler<KeePass.Forms.FileClosingEventArgs> onClosing = (_, args) =>
+                {
+                    if (!ReferenceEquals(args.Database, database)) return;
+                    lock (assignmentSync) lifetime.Cancel();
+                    if (form != null && !form.IsDisposed) form.Abort();
+                };
+                mainWindow.FileClosingPre += onClosing;
+                try
+                {
+                    var target = new IconChoiceTarget(database, entry);
+                    target.Validate();
+                    string currentContentKey = target.OriginalPng != null
+                        ? PreparedIcon.GetContentKey(IconNormalizer.NormalizeToPng(target.OriginalPng, "image/png", "", lifetime.Token))
+                        : null;
+                    Image currentImage = null;
+                    if (target.OriginalPng != null)
+                    {
+                        using (var stream = new MemoryStream(target.OriginalPng))
+                        using (var image = Image.FromStream(stream)) currentImage = new Bitmap(image);
+                    }
+                    else if ((int)entry.IconId < mainWindow.ClientIcons.Images.Count)
+                        currentImage = new Bitmap(mainWindow.ClientIcons.Images[(int)entry.IconId]);
+
+                    form = new IconChooserForm(entry.Strings.ReadSafe(PwDefs.TitleField), currentImage, currentContentKey);
+                    form.Icon = GetDialogIcon();
+                    activeIconChooser = form;
+                    form.FormClosed += (_, __) => lifetime.Cancel();
+                    form.Show(mainWindow);
+                    Uri directImageUri;
+                    bool directImage = TryGetDirectImageUrl(url, out directImageUri);
+                    searchTask = RunChooserSearchAsync(form, url, directImage, searchCancellation.Token);
+                    PreparedIcon selected = await form.Completion;
+                    searchCancellation.Cancel();
+                    await searchTask;
+                    if (selected == null || lifetime.IsCancellationRequested) return;
+                    if (!TryValidateRunContext(database, out reason)) throw new InvalidOperationException(reason);
+                    target.Validate();
+                    // Preserve the existing off-UI-thread assignment workaround.
+                    await Task.Run(() =>
+                    {
+                        lock (assignmentSync)
+                        {
+                            lifetime.Token.ThrowIfCancellationRequested();
+                            target.Validate();
+                            KeePassIconAssigner.AssignNormalizedPngToEntry(database, entry, selected.PngBytes);
+                        }
+                    }, lifetime.Token);
+                    if (!isShuttingDown && database.IsOpen) RefreshEntryListIcons(entry);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    if (!isShuttingDown && !lifetime.IsCancellationRequested)
+                        MessageBox.Show(mainWindow, ex.Message, "Choose another icon", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                finally
+                {
+                    searchCancellation.Cancel();
+                    await searchTask;
+                    mainWindow.FileClosingPre -= onClosing;
+                    if (form != null)
+                    {
+                        if (!form.IsDisposed) form.Abort();
+                        form.Dispose();
+                    }
+                    activeIconChooser = null;
+                    extractCancellationTokenSource = null;
+                    isExtractRunning = false;
+                }
+            }
+        }
+
+        private static async Task RunChooserSearchAsync(IconChooserForm form, string url, bool directImage, CancellationToken token)
+        {
+            // Progress captures the KeePass UI context and guards against queued callbacks after close.
+            var icons = new Progress<PreparedIcon>(icon => { if (!form.IsDisposed && !token.IsCancellationRequested) form.AddResult(icon); });
+            var status = new Progress<string>(line => { if (!form.IsDisposed && !token.IsCancellationRequested) form.SetStatus(line); });
+            try
+            {
+                var result = await Task.Run(() => AlternativeIconSearch.SearchAsync(url, directImage,
+                    icon => ((IProgress<PreparedIcon>)icons).Report(icon),
+                    line => ((IProgress<string>)status).Report(line), token), token);
+                if (!form.IsDisposed && !token.IsCancellationRequested) form.CompleteSearch(result);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!form.IsDisposed) form.SetStatus("Search failed: " + ex.Message + " Available icons can still be used."); }
         }
 
         private async void OnExtractFaviconClick(object sender, EventArgs e)
@@ -364,6 +511,13 @@ namespace FaviconExtractor
                         }
                         statusForm.AppendLineSafe(string.Empty);
                         statusForm.AppendLineSafe("Success: icon assigned.");
+                        string chooserReason;
+                        if (CanChooseIcon(url, out chooserReason))
+                            statusForm.AttachChooseAction(() =>
+                            {
+                                statusForm.Close();
+                                _ = RunIconChooserAsync(runDatabase, selectedEntry, url);
+                            });
                         statusForm.MarkCompletedWithCountdown(3);
                         return;
                     }
@@ -1170,7 +1324,7 @@ namespace FaviconExtractor
 
                     Stopwatch downloadStopwatch = Stopwatch.StartNew();
                     ReportStatus(onStatus, "Candidate #" + (i + 1) + " downloading...");
-                    byte[] sourceBytes = await FaviconImageDownloader
+                    byte[] sourceBytes = await CandidatePreparation
                         .DownloadAsync(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
                         .ConfigureAwait(true);
                     downloadStopwatch.Stop();
@@ -1291,7 +1445,7 @@ namespace FaviconExtractor
 
                                 Stopwatch downloadStopwatch = Stopwatch.StartNew();
                                 ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " downloading...");
-                                byte[] sourceBytes = await FaviconImageDownloader
+                                byte[] sourceBytes = await CandidatePreparation
                                     .DownloadAsync(candidate.IconUri, cancellationToken, enforceStrictNetworkSafety)
                                     .ConfigureAwait(true);
                                 downloadStopwatch.Stop();
@@ -1416,7 +1570,7 @@ namespace FaviconExtractor
 
                             Stopwatch downloadStopwatch = Stopwatch.StartNew();
                             ReportStatus(onStatus, "Rescue candidate #" + (i + 1) + " downloading...");
-                            byte[] sourceBytes = await FaviconImageDownloader
+                            byte[] sourceBytes = await CandidatePreparation
                                 .DownloadAsync(candidate.IconUri, cancellationToken)
                                 .ConfigureAwait(true);
                             downloadStopwatch.Stop();
@@ -1498,15 +1652,11 @@ namespace FaviconExtractor
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                byte[] normalizedPng;
-                try
+                byte[] normalizedPng = CandidatePreparation.Normalize(new FaviconCandidate
                 {
-                    normalizedPng = IconNormalizer.NormalizeToPng(sourceBytes, typeAttribute, iconUrl, cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException("Normalize failed: " + ex.Message, ex);
-                }
+                    TypeAttribute = typeAttribute,
+                    IconUri = new Uri(iconUrl)
+                }, sourceBytes, cancellationToken).PngBytes;
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -2198,10 +2348,12 @@ namespace FaviconExtractor
             private readonly Button cancelButton;
             private readonly Button retryButton;
             private readonly Button closeButton;
+            private readonly Button chooseButton;
             private readonly ContextMenuStrip outputContextMenu;
             private readonly System.Windows.Forms.Timer closeCountdownTimer;
             private Action cancelAction;
             private Action retryAction;
+            private Action chooseAction;
             private int countdownSeconds;
             private bool isInProgress;
             private bool isOutputContextMenuOpen;
@@ -2296,6 +2448,8 @@ namespace FaviconExtractor
                 buttonPanel.Dock = DockStyle.Bottom;
                 buttonPanel.FlowDirection = FlowDirection.RightToLeft;
                 buttonPanel.Height = 40;
+                buttonPanel.AutoSize = true;
+                buttonPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
                 buttonPanel.Padding = new Padding(8, 6, 8, 6);
 
                 closeButton = new Button();
@@ -2316,8 +2470,20 @@ namespace FaviconExtractor
                 retryButton.Enabled = false;
                 retryButton.Click += OnRetryClick;
 
+                chooseButton = new Button();
+                chooseButton.Text = "Choose another icon…";
+                chooseButton.AutoSize = true;
+                chooseButton.Visible = false;
+                chooseButton.Click += (_, __) =>
+                {
+                    CancelAutoCloseCountdown();
+                    Action action = chooseAction;
+                    if (action != null) action();
+                };
+
                 buttonPanel.Controls.Add(closeButton);
                 buttonPanel.Controls.Add(retryButton);
+                buttonPanel.Controls.Add(chooseButton);
                 buttonPanel.Controls.Add(cancelButton);
 
                 closeCountdownTimer = new System.Windows.Forms.Timer();
@@ -2379,6 +2545,13 @@ namespace FaviconExtractor
                 retryAction = action;
             }
 
+            public void AttachChooseAction(Action action)
+            {
+                if (IsDisposed) return;
+                chooseAction = action;
+                chooseButton.Visible = action != null;
+            }
+
             public void BeginProgress()
             {
                 if (IsDisposed)
@@ -2394,6 +2567,8 @@ namespace FaviconExtractor
 
                 closeCountdownTimer.Stop();
                 outputTextBox.Clear();
+                chooseAction = null;
+                chooseButton.Visible = false;
                 ClearPreviewImage();
                 pendingAutoClose = false;
                 isOutputContextMenuOpen = false;
@@ -2635,6 +2810,7 @@ namespace FaviconExtractor
 
             protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
             {
+                if (!isInProgress) CancelAutoCloseCountdown();
                 if (keyData == Keys.Escape)
                 {
                     if (cancelButton.Enabled)

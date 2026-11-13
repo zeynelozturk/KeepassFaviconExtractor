@@ -41,6 +41,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="KeePass">
       <HintPath>..\.deps\KeePass\2.61\KeePass.exe</HintPath>
       <Private>True</Private>
@@ -48,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="IconNormalizerTests.cs" />
+    <Compile Include="IconChooserTests.cs" />
     <Compile Include="AndroidAppIdentifierTests.cs" />
     <Compile Include="NetworkSafetyTests.cs" />
   </ItemGroup>

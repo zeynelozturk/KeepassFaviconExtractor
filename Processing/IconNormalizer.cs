@@ -29,6 +29,12 @@ namespace FaviconExtractor
 
         public static byte[] NormalizeToPng(byte[] sourceBytes, string contentType, string sourceUrl, CancellationToken cancellationToken)
         {
+            Size? decodedSize;
+            return NormalizeToPng(sourceBytes, contentType, sourceUrl, cancellationToken, out decodedSize);
+        }
+
+        internal static byte[] NormalizeToPng(byte[] sourceBytes, string contentType, string sourceUrl, CancellationToken cancellationToken, out Size? decodedSize)
+        {
             if (sourceBytes == null || sourceBytes.Length == 0)
             {
                 throw new ArgumentException("Source icon bytes are empty.", nameof(sourceBytes));
@@ -43,6 +49,8 @@ namespace FaviconExtractor
             using (Bitmap normalizedBitmap = NormalizeBitmap(sourceBitmap, isSvgSource))
             using (MemoryStream outputStream = new MemoryStream())
             {
+                // SVG is rendered to a working canvas, not decoded at a native pixel size.
+                decodedSize = isSvgSource ? (Size?)null : sourceBitmap.Size;
                 cancellationToken.ThrowIfCancellationRequested();
                 normalizedBitmap.Save(outputStream, ImageFormat.Png);
                 return outputStream.ToArray();
