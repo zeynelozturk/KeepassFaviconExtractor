@@ -142,8 +142,14 @@ namespace FaviconExtractor
                 thumbnails.Images.Add(preview);
             }
             bool inUse = icon.ContentKey == currentKey;
-            var item = new ListViewItem((inUse ? "Already in use · " : "") + icon.Candidate.Source, results.Count - 1);
-            item.ToolTipText = icon.Candidate.IconUri.AbsoluteUri;
+            string dimensions = icon.DecodedSize.HasValue
+                ? "(" + icon.DecodedSize.Value.Width + "×" + icon.DecodedSize.Value.Height + ")"
+                : "(vector / unknown)";
+            var item = new ListViewItem(dimensions + Environment.NewLine +
+                (inUse ? "Already in use · " : "") + icon.Candidate.Source, results.Count - 1);
+            item.ToolTipText = icon.Candidate.Source + Environment.NewLine + dimensions +
+                (inUse ? Environment.NewLine + "Already in use" : "") +
+                Environment.NewLine + icon.Candidate.IconUri.AbsoluteUri;
             candidates.Items.Add(item);
             // Adding a result must never change selection or keyboard focus.
         }
